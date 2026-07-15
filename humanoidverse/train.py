@@ -15,6 +15,24 @@ from pathlib import Path
 from omegaconf import OmegaConf
 
 
+def _global_disable_torch_compile() -> None:
+    """Globally disable torch.compile and torch._dynamo.
+
+    Needed on Blackwell (RTX 5090, sm_120) where Triton kernels are not yet
+    available.  Without this, hard-coded torch.compile() calls in agent and
+    buffer code (trajectory.py, fb/agent.py, etc.) will still try to compile
+    Triton kernels and fail with "device kernel image is invalid".
+    """
+    os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+    import torch._dynamo
+    torch._dynamo.config.disable = True  # make compiled wrappers passthrough
+    import torch
+    _orig_compile = torch.compile
+    def _noop_compile(f, /, *args, **kwargs):
+        return f
+    torch.compile = _noop_compile  # make future torch.compile() identity
+
+
 def _ensure_compile_cache(cache_root: str | Path | None = None) -> None:
     cache_dir = os.environ.get("UFO_CACHE_DIR") or os.environ.get("BFMZERO_MJLAB_CACHE_DIR")
     root = Path(cache_dir or cache_root or Path.cwd() / "cache").expanduser()
@@ -113,6 +131,7 @@ def build_ufo_mjlab_config(
     cartwheel_aux_safe: bool = False,
     num_agent_updates: int | None = None,
     robot_config: str | Path | None = None,
+    disable_compile: bool = False,
 ) -> TrainConfig:
     agent = canonical_agent_name(agent)
     robot_training = load_robot_training_spec(robot_config or DEFAULT_ROBOT_CONFIG)
@@ -150,7 +169,7 @@ def build_ufo_mjlab_config(
     selected = build_agent_preset(
         agent=agent,
         device=agent_device,
-        compile=not distributed_sync,
+        compile=not distributed_sync and not disable_compile,
         update_z_every_step=resolved_update_z_every_step,
         lr_scale=lr_scale,
         clip_grad_norm=clip_grad_norm,
@@ -319,6 +338,7 @@ def run_train(args: argparse.Namespace, log_dir: Path) -> None:
         cartwheel_aux_safe=bool(args.cartwheel_aux_safe),
         num_agent_updates=args.num_agent_updates,
         robot_config=args.robot_config,
+        disable_compile=bool(args.disable_compile),
     )
     print(
         "[INFO] UFO train: "
@@ -330,7 +350,7 @@ def run_train(args: argparse.Namespace, log_dir: Path) -> None:
         f"num_agent_updates={cfg.num_agent_updates}, update_agent_every_local={cfg.update_agent_every}, "
         f"cartwheel_aux_safe={args.cartwheel_aux_safe}, lr_scale={args.lr_scale}, clip_grad_norm={args.clip_grad_norm}, "
         f"disable_dr={cfg.env.disable_domain_randomization}, disable_obs_noise={cfg.env.disable_obs_noise}, "
-        f"compile={cfg.agent.compile}",
+        f"compile={cfg.agent.compile}, disable_compile={args.disable_compile}",
         flush=True,
     )
     try:
@@ -348,6 +368,8 @@ def launch(args: argparse.Namespace) -> None:
     log_dir = Path(args.work_dir).expanduser().resolve()
     log_dir.mkdir(parents=True, exist_ok=True)
     _ensure_compile_cache()
+    if args.disable_compile:
+        _global_disable_torch_compile()
     if args.gpu_ids in (None, "single"):
         run_train(args, log_dir)
         return
@@ -462,6 +484,7 @@ def parse_args() -> argparse.Namespace:
             "2048 envs/GPU and 64 with 4096 envs/GPU to match the 1024 envs/GPU update density."
         ),
     )
+    parser.add_argument("--disable-compile", action="store_true", help="Disable torch.compile (Triton). Use on Blackwell (RTX 5090) or when Triton lacks GPU arch support.")
     parser.add_argument("--disable-dr", action="store_true", help="Disable domain randomization for training.")
     parser.add_argument("--disable-obs-noise", action="store_true", help="Disable observation noise for training.")
     parser.add_argument("--lr-scale", type=float, default=1.0, help="Scale FB learning rates. TeCH preset ignores this value.")
