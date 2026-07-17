@@ -34,7 +34,35 @@ def build_tldr_agent(
     device: str = "cuda",
     compile: bool = True,
     update_z_every_step: int = 10,
+    low_memory: bool = False,
 ) -> TldrDistAuxAgentConfig:
+    if low_memory:
+        z_dim = 128
+        actor_hidden_dim = 1024
+        actor_hidden_layers = 4
+        critic_hidden_dim = 1024
+        critic_hidden_layers = 4
+        aux_critic_hidden_dim = 1024
+        aux_critic_hidden_layers = 4
+        goal_encoder_hidden_dim = 128
+        discriminator_hidden_dim = 512
+        discriminator_hidden_layers = 2
+        batch_size = 512
+        inference_batch_size = 256000
+    else:
+        z_dim = 256
+        actor_hidden_dim = 2048
+        actor_hidden_layers = 6
+        critic_hidden_dim = 2048
+        critic_hidden_layers = 6
+        aux_critic_hidden_dim = 2048
+        aux_critic_hidden_layers = 6
+        goal_encoder_hidden_dim = 256
+        discriminator_hidden_dim = 1024
+        discriminator_hidden_layers = 3
+        batch_size = 1024
+        inference_batch_size = 500000
+
     return TldrDistAuxAgentConfig(
         name="TldrDistAuxAgent",
         model=GcrRlDistAuxModelConfig(
@@ -42,11 +70,11 @@ def build_tldr_agent(
             device=device,
             archi=GcrRlDistAuxModelArchiConfig(
                 name="GcrRlDistAuxModelArchiConfig",
-                z_dim=256,
+                z_dim=z_dim,
                 norm_z=True,
                 goal_encoder=BackwardArchiConfig(
                     name="BackwardArchi",
-                    hidden_dim=256,
+                    hidden_dim=goal_encoder_hidden_dim,
                     hidden_layers=1,
                     norm=True,
                     input_filter=DictInputFilterConfig(name="DictInputFilterConfig", key=["state", "privileged_state"]),
@@ -54,16 +82,16 @@ def build_tldr_agent(
                 actor=ActorArchiConfig(
                     name="actor",
                     model="residual",
-                    hidden_dim=2048,
-                    hidden_layers=6,
+                    hidden_dim=actor_hidden_dim,
+                    hidden_layers=actor_hidden_layers,
                     embedding_layers=2,
                     input_filter=DictInputFilterConfig(name="DictInputFilterConfig", key=["state", "last_action", "history_actor"]),
                 ),
                 critic=ForwardArchiConfig(
                     name="ForwardArchi",
-                    hidden_dim=2048,
+                    hidden_dim=critic_hidden_dim,
                     model="residual",
-                    hidden_layers=6,
+                    hidden_layers=critic_hidden_layers,
                     embedding_layers=2,
                     num_parallel=2,
                     ensemble_mode="batch",
@@ -73,15 +101,15 @@ def build_tldr_agent(
                 ),
                 discriminator=DiscriminatorArchiConfig(
                     name="DiscriminatorArchi",
-                    hidden_dim=1024,
-                    hidden_layers=3,
+                    hidden_dim=discriminator_hidden_dim,
+                    hidden_layers=discriminator_hidden_layers,
                     input_filter=DictInputFilterConfig(name="DictInputFilterConfig", key=["state", "privileged_state"]),
                 ),
                 aux_critic=ForwardArchiConfig(
                     name="ForwardArchi",
-                    hidden_dim=2048,
+                    hidden_dim=aux_critic_hidden_dim,
                     model="residual",
-                    hidden_layers=6,
+                    hidden_layers=aux_critic_hidden_layers,
                     embedding_layers=2,
                     num_parallel=2,
                     ensemble_mode="batch",
@@ -100,7 +128,7 @@ def build_tldr_agent(
                 },
                 allow_mismatching_keys=True,
             ),
-            inference_batch_size=500000,
+            inference_batch_size=inference_batch_size,
             seq_length=8,
             actor_std=0.05,
             amp=False,
@@ -120,7 +148,7 @@ def build_tldr_agent(
             weight_decay=0.0,
             weight_decay_discriminator=0.0,
             clip_grad_norm=0.0,
-            batch_size=1024,
+            batch_size=batch_size,
             discount=0.98,
             stddev_clip=0.3,
             actor_pessimism_penalty=0.5,

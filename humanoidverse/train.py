@@ -132,6 +132,7 @@ def build_ufo_mjlab_config(
     num_agent_updates: int | None = None,
     robot_config: str | Path | None = None,
     disable_compile: bool = False,
+    low_memory: bool = False,
 ) -> TrainConfig:
     agent = canonical_agent_name(agent)
     robot_training = load_robot_training_spec(robot_config or DEFAULT_ROBOT_CONFIG)
@@ -175,6 +176,7 @@ def build_ufo_mjlab_config(
         clip_grad_norm=clip_grad_norm,
         cartwheel_aux_safe=cartwheel_aux_safe,
         wandb_project=DEFAULT_WANDB_PROJECT,
+        low_memory=low_memory,
     )
     agent_cfg = selected["agent_cfg"]
     wandb_group = selected["wandb_group"]
@@ -339,6 +341,7 @@ def run_train(args: argparse.Namespace, log_dir: Path) -> None:
         num_agent_updates=args.num_agent_updates,
         robot_config=args.robot_config,
         disable_compile=bool(args.disable_compile),
+        low_memory=bool(args.low_memory),
     )
     print(
         "[INFO] UFO train: "
@@ -350,7 +353,8 @@ def run_train(args: argparse.Namespace, log_dir: Path) -> None:
         f"num_agent_updates={cfg.num_agent_updates}, update_agent_every_local={cfg.update_agent_every}, "
         f"cartwheel_aux_safe={args.cartwheel_aux_safe}, lr_scale={args.lr_scale}, clip_grad_norm={args.clip_grad_norm}, "
         f"disable_dr={cfg.env.disable_domain_randomization}, disable_obs_noise={cfg.env.disable_obs_noise}, "
-        f"compile={cfg.agent.compile}, disable_compile={args.disable_compile}",
+        f"compile={cfg.agent.compile}, disable_compile={args.disable_compile}, "
+        f"low_memory={args.low_memory}",
         flush=True,
     )
     try:
@@ -503,6 +507,7 @@ def parse_args() -> argparse.Namespace:
         help="Validation/debug only: skip tracking eval and expert prioritization without changing default training behavior.",
     )
     parser.add_argument("--smoke", action="store_true", help="Short local smoke settings: 16 envs, 2048 env steps, no W&B.")
+    parser.add_argument("--low-memory", action="store_true", help="Enable low-memory training mode: reduces env count, buffer size, disables compile.")
     args = parser.parse_args()
     raw_agent = args.agent
     args.agent = canonical_agent_name(args.agent)
@@ -510,6 +515,10 @@ def parse_args() -> argparse.Namespace:
         print("WARNING: agent=tldr is deprecated; use agent=tech instead.", file=sys.stderr, flush=True)
     if args.update_z_every_step is None:
         args.update_z_every_step = _default_update_z_every_step(args.agent)
+    if args.low_memory:
+        args.num_envs = min(args.num_envs, 512)
+        args.buffer_size = min(args.buffer_size, 2560000)
+        args.disable_compile = True
     if args.smoke:
         args.num_envs = min(args.num_envs, 16)
         args.num_env_steps = min(args.num_env_steps, 2048)

@@ -29,13 +29,17 @@ dependencies = [
     "safetensors>=0.5.3",
     "tensordict>=0.8.3",
     "termcolor>=3.0.1",
-    "torch>=2.7.0,<2.8.0",
+    "torch==2.11.0+cu128",
     "torchrunx>=0.3.4",
     "wandb>=0.26.0",
 ]
 
 [[tool.uv.index]]
 url = "https://pypi.nvidia.com/"
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
 
 # sim2real = [
 #     "unitree-sdk2py",
@@ -59,6 +63,7 @@ dev = [
 ]
 
 [tool.uv]
+environments = ["sys_platform == 'linux'"]
 index-strategy = "unsafe-best-match"
 override-dependencies = [
     "dm-control>=1.0.20",

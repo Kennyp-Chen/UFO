@@ -34,6 +34,7 @@ def build_fb_agent(
     lr_scale: float = 1.0,
     clip_grad_norm: float = 0.0,
     cartwheel_aux_safe: bool = False,
+    low_memory: bool = False,
 ) -> FBcprAuxAgentConfig:
     if cartwheel_aux_safe:
         aux_rewards = [
@@ -70,6 +71,26 @@ def build_fb_agent(
             "limits_torque": 0.0,
         }
 
+    # Low-memory mode: reduce model dimensions and batch size
+    if low_memory:
+        z_dim = 128
+        hidden_dim = 1024
+        hidden_layers = 4
+        b_hidden_dim = 128
+        disc_hidden_dim = 512
+        disc_hidden_layers = 2
+        batch_size = 512
+        inference_batch_size = 256000
+    else:
+        z_dim = 256
+        hidden_dim = 2048
+        hidden_layers = 6
+        b_hidden_dim = 256
+        disc_hidden_dim = 1024
+        disc_hidden_layers = 3
+        batch_size = 1024
+        inference_batch_size = 500000
+
     return FBcprAuxAgentConfig(
         name="FBcprAuxAgent",
         model=FBcprAuxModelConfig(
@@ -77,13 +98,13 @@ def build_fb_agent(
             device=device,
             archi=FBcprAuxModelArchiConfig(
                 name="FBcprAuxModelArchiConfig",
-                z_dim=256,
+                z_dim=z_dim,
                 norm_z=True,
                 f=ForwardArchiConfig(
                     name="ForwardArchi",
-                    hidden_dim=2048,
+                    hidden_dim=hidden_dim,
                     model="residual",
-                    hidden_layers=6,
+                    hidden_layers=hidden_layers,
                     embedding_layers=2,
                     num_parallel=2,
                     ensemble_mode="batch",
@@ -93,7 +114,7 @@ def build_fb_agent(
                 ),
                 b=BackwardArchiConfig(
                     name="BackwardArchi",
-                    hidden_dim=256,
+                    hidden_dim=b_hidden_dim,
                     hidden_layers=1,
                     norm=True,
                     input_filter=DictInputFilterConfig(name="DictInputFilterConfig", key=["state", "privileged_state"]),
@@ -101,16 +122,16 @@ def build_fb_agent(
                 actor=ActorArchiConfig(
                     name="actor",
                     model="residual",
-                    hidden_dim=2048,
-                    hidden_layers=6,
+                    hidden_dim=hidden_dim,
+                    hidden_layers=hidden_layers,
                     embedding_layers=2,
                     input_filter=DictInputFilterConfig(name="DictInputFilterConfig", key=["state", "last_action", "history_actor"]),
                 ),
                 critic=ForwardArchiConfig(
                     name="ForwardArchi",
-                    hidden_dim=2048,
+                    hidden_dim=hidden_dim,
                     model="residual",
-                    hidden_layers=6,
+                    hidden_layers=hidden_layers,
                     embedding_layers=2,
                     num_parallel=2,
                     ensemble_mode="batch",
@@ -120,15 +141,15 @@ def build_fb_agent(
                 ),
                 discriminator=DiscriminatorArchiConfig(
                     name="DiscriminatorArchi",
-                    hidden_dim=1024,
-                    hidden_layers=3,
+                    hidden_dim=disc_hidden_dim,
+                    hidden_layers=disc_hidden_layers,
                     input_filter=DictInputFilterConfig(name="DictInputFilterConfig", key=["state", "privileged_state"]),
                 ),
                 aux_critic=ForwardArchiConfig(
                     name="ForwardArchi",
-                    hidden_dim=2048,
+                    hidden_dim=hidden_dim,
                     model="residual",
-                    hidden_layers=6,
+                    hidden_layers=hidden_layers,
                     embedding_layers=2,
                     num_parallel=2,
                     ensemble_mode="batch",
@@ -147,7 +168,7 @@ def build_fb_agent(
                 },
                 allow_mismatching_keys=True,
             ),
-            inference_batch_size=500000,
+            inference_batch_size=inference_batch_size,
             seq_length=8,
             actor_std=0.05,
             amp=False,
@@ -167,7 +188,7 @@ def build_fb_agent(
             actor_pessimism_penalty=0.5,
             stddev_clip=0.3,
             q_loss_coef=0.0,
-            batch_size=1024,
+            batch_size=batch_size,
             discount=0.98,
             use_mix_rollout=True,
             update_z_every_step=int(update_z_every_step),
