@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PROJECT_DIR="${UFO_PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+TMUX_SESSION="${TRAIN_TMUX_SESSION:-piplus-bfm-6gpu}"
+
+if [[ "${1:-}" == "--foreground" ]]; then
+  shift
+elif [[ -z "${TMUX:-}" ]]; then
+  command -v tmux >/dev/null || {
+    echo "tmux is required to run training in the background." >&2
+    exit 1
+  }
+  if tmux has-session -t "$TMUX_SESSION" 2>/dev/null; then
+    if [[ "$(tmux display-message -p -t "$TMUX_SESSION":0.0 '#{pane_dead}')" == "1" ]]; then
+      tmux kill-session -t "$TMUX_SESSION"
+    else
+      echo "tmux session '$TMUX_SESSION' already exists; training was not started twice." >&2
+      echo "Attach with: tmux attach -t $TMUX_SESSION" >&2
+      exit 1
+    fi
+  fi
+
+  printf -v tmux_command '%q ' "$PROJECT_DIR/train_cmds" --foreground "$@"
+  tmux new-session -d -s "$TMUX_SESSION" -c "$PROJECT_DIR" "$tmux_command"
+  tmux set-option -t "$TMUX_SESSION" remain-on-exit on >/dev/null
+  echo "Training started in detached tmux session: $TMUX_SESSION"
+  echo "Attach with: tmux attach -t $TMUX_SESSION"
+  exit 0
+fi
+
+export UFO_PROJECT_DIR="$PROJECT_DIR"
+export PATH="$HOME/.local/bin:$PATH"
+export PIPLUS_MOTION_DIR="${PIPLUS_MOTION_DIR:-$UFO_PROJECT_DIR/data/piplus}"
+export UFO_CACHE_DIR="${UFO_CACHE_DIR:-$UFO_PROJECT_DIR/cache}"
+export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-1,2,3,4,5,6}"
+export NCCL_NVLS_ENABLE="${NCCL_NVLS_ENABLE:-0}"
+export PYTHONUNBUFFERED=1
+
+cd "$UFO_PROJECT_DIR"
+
+RUN_DIR="${RUN_DIR:-$UFO_PROJECT_DIR/runs/piplus_bfm_fb_6x4090_seed4728}"
+mkdir -p "$(dirname "$RUN_DIR")"
+
+./run_train.sh \
+  --agent fb \
+  --robot-config configs/robots/piplus_bfm.yaml \
+  --data-manifest configs/data/piplus_lafan.yaml \
+  --gpu-ids all \
+  --num-envs 512 \
+  --num-env-steps 192000000 \
+  --buffer-size 1280000 \
+  --checkpoint-every-steps 3200000 \
+  --update-z-every-step 100 \
+  --seed 4728 \
+  --work-dir "$RUN_DIR" \
+  "$@" \
+  2>&1 | tee -a "$RUN_DIR.launch.log"

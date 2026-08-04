@@ -1,0 +1,18 @@
+robot_config: configs/robots/piplus_bfm.yaml
+
+metadata:
+  description: PiPlus LSE LaFAN expert motions migrated from HT_BFM-piplus_5090conda.
+  source_root: /home/cato/Documents/HT_MotionData/lafan/pi_LSE_lafan_260706
+  train_sha256: 5c4ad84e1743706f8fdd1059c68e6d04a466a128a21167612e2a766f40d0924c
+  inference_sha256: 6dbc8cdcd923fa1a3243e9f838d98166f5935aab09d2c25b8c3770fa16c2457a
+  expected_joint_count: 23
+  expected_fps: 30
+
+datasets:
+  - name: piplus_lafan
+    format: ufo_pkl
+    train_path: ${oc.env:PIPLUS_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/pi_LSE_lafan_260706}/piplus_lse_lafan_10s-clipped.pkl
+    inference_path: ${oc.env:PIPLUS_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/pi_LSE_lafan_260706}/piplus_lse_lafan.pkl
+    train_sha256: 5c4ad84e1743706f8fdd1059c68e6d04a466a128a21167612e2a766f40d0924c
+    inference_sha256: 6dbc8cdcd923fa1a3243e9f838d98166f5935aab09d2c25b8c3770fa16c2457a
+    weight: 1.0

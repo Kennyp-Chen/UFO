@@ -1,0 +1,57 @@
+PiPlus LSE LAFAN motion list
+================================
+
+数据文件：cache/remote_piplus/data/piplus/piplus_lse_lafan.pkl
+可选 motion 总数：40
+motion ID：从 0 开始，按 pkl 中的字典顺序编号；tracking_inference.py 的 --motion-list 使用此 ID。
+
+当前命令 --motion-list 8 14 22：
+  8  = fallAndGetUp1_subject1：跌倒后起身
+  14 = fight1_subject2：格斗/对抗动作
+  22 = run1_subject2：普通跑步
+
+完整列表
+----------
+ID  轨迹名（去除数据集后缀）                 风格/动作说明                         帧数  约时长(s)
+0   dance1_subject1                         舞蹈，dance1 风格，subject1           3945   131.47
+1   dance1_subject2                         舞蹈，dance1 风格，subject2           3945   131.47
+2   dance1_subject3                         舞蹈，dance1 风格，subject3           3945   131.47
+3   dance2_subject1                         舞蹈，dance2 风格，subject1           6771   225.67
+4   dance2_subject2                         舞蹈，dance2 风格，subject2           6771   225.67
+5   dance2_subject3                         舞蹈，dance2 风格，subject3           6771   225.67
+6   dance2_subject4                         舞蹈，dance2 风格，subject4           6771   225.67
+7   dance2_subject5                         舞蹈，dance2 风格，subject5           6771   225.67
+8   fallAndGetUp1_subject1                  跌倒后起身，fallAndGetUp1，subject1    5047   168.20
+9   fallAndGetUp1_subject4                  跌倒后起身，fallAndGetUp1，subject4    5047   168.20
+10  fallAndGetUp1_subject5                  跌倒后起身，fallAndGetUp1，subject5    5047   168.20
+11  fallAndGetUp2_subject2                  跌倒后起身，fallAndGetUp2，subject2    4918   163.90
+12  fallAndGetUp2_subject3                  跌倒后起身，fallAndGetUp2，subject3    4918   163.90
+13  fallAndGetUp3_subject1                  跌倒后起身，fallAndGetUp3，subject1    3066   102.17
+14  fight1_subject2                         格斗/对抗，fight1 风格，subject2       7347   244.87
+15  fight1_subject3                         格斗/对抗，fight1 风格，subject3       7347   244.87
+16  fight1_subject5                         格斗/对抗，fight1 风格，subject5       7347   244.87
+17  fightAndSports1_subject1               格斗与体育混合，subject1                7355   245.13
+18  fightAndSports1_subject4               格斗与体育混合，subject4                7355   245.13
+19  jumps1_subject1                         跳跃，jumps1 风格，subject1            7334   244.43
+20  jumps1_subject2                         跳跃，jumps1 风格，subject2            7334   244.43
+21  jumps1_subject5                         跳跃，jumps1 风格，subject5            7334   244.43
+22  run1_subject2                           跑步，run1 风格，subject2              7135   237.80
+23  run1_subject5                           跑步，run1 风格，subject5              7135   237.80
+24  run2_subject1                           跑步，run2 风格，subject1              7345   244.80
+25  run2_subject4                           跑步，run2 风格，subject4              7345   244.80
+26  sprint1_subject2                        冲刺/快速跑，sprint1，subject2          8194   273.10
+27  sprint1_subject4                        冲刺/快速跑，sprint1，subject4          8194   273.10
+28  walk1_subject1                          行走，walk1 风格，subject1             7840   261.30
+29  walk1_subject2                          行走，walk1 风格，subject2             7840   261.30
+30  walk1_subject5                          行走，walk1 风格，subject5             7840   261.30
+31  walk2_subject1                          行走，walk2 风格，subject1             7146   238.17
+32  walk2_subject3                          行走，walk2 风格，subject3             7146   238.17
+33  walk2_subject4                          行走，walk2 风格，subject4             7146   238.17
+34  walk3_subject1                          行走，walk3 风格，subject1             7399   246.60
+35  walk3_subject2                          行走，walk3 风格，subject2             7399   246.60
+36  walk3_subject3                          行走，walk3 风格，subject3             7399   246.60
+37  walk3_subject4                          行走，walk3 风格，subject4             7399   246.60
+38  walk3_subject5                          行走，walk3 风格，subject5             7399   246.60
+39  walk4_subject1                          行走，walk4 风格，subject1             4918   163.90
+
+说明：所有轨迹的原始 fps 均为 30。轨迹名中的 subjectN 表示不同采集主体；同一动作族的主体变体通常具有相同帧数和时长，但具体姿态细节不同。

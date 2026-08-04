@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiPlus Soccer × BFM：足球状态扩展与训练实施方案</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172126;
+      --muted: #52616a;
+      --line: #cbd5d8;
+      --paper: #ffffff;
+      --band: #eef3f2;
+      --accent: #006b5f;
+      --accent-soft: #dff3ee;
+      --blue: #245b78;
+      --blue-soft: #e7f1f6;
+      --warn: #8a4b08;
+      --warn-soft: #fff3d6;
+      --danger: #9f2d2d;
+      --danger-soft: #fde8e7;
+      --code: #102023;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.72;
+      letter-spacing: 0;
+    }
+    header {
+      padding: 52px 24px 40px;
+      color: #f8fffd;
+      background: #153b3a;
+      border-bottom: 6px solid #efb13d;
+    }
+    header .inner, nav .inner, main, footer .inner { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+    h1 { margin: 0 0 12px; font-size: clamp(30px, 4vw, 46px); line-height: 1.2; }
+    header p { max-width: 940px; margin: 0; color: #d8ebe7; font-size: 18px; }
+    nav { position: sticky; top: 0; z-index: 3; overflow-x: auto; background: #fff; border-bottom: 1px solid var(--line); }
+    nav .inner { display: flex; gap: 20px; padding: 12px 0; white-space: nowrap; }
+    nav a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    main { padding: 30px 0 64px; }
+    section { padding: 27px 0; border-bottom: 1px solid var(--line); }
+    h2 { margin: 0 0 14px; color: #123f3b; font-size: 27px; }
+    h3 { margin: 24px 0 8px; font-size: 20px; }
+    h4 { margin: 20px 0 6px; font-size: 17px; }
+    p, ul, ol { margin-top: 8px; margin-bottom: 14px; }
+    li + li { margin-top: 6px; }
+    code { padding: 2px 5px; color: #064e48; background: #e9f2f0; border-radius: 3px; font-family: ui-monospace, monospace; }
+    pre { overflow-x: auto; margin: 14px 0; padding: 16px; color: #edf9f6; background: var(--code); border-left: 4px solid #4fc3ad; border-radius: 4px; line-height: 1.55; }
+    pre code { padding: 0; color: inherit; background: transparent; }
+    table { width: 100%; margin: 16px 0; border-collapse: collapse; }
+    th, td { padding: 11px 12px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
+    th { color: #143b38; background: var(--band); }
+    .note, .info, .warn, .stop { margin: 16px 0; padding: 14px 16px; border-left: 5px solid var(--accent); background: var(--accent-soft); }
+    .info { border-color: var(--blue); background: var(--blue-soft); }
+    .warn { border-color: var(--warn); background: var(--warn-soft); }
+    .stop { border-color: var(--danger); background: var(--danger-soft); }
+    .status { font-weight: 800; color: var(--accent); }
+    .todo { font-weight: 800; color: var(--warn); }
+    .flow { margin: 18px 0; padding: 16px 18px; color: #eaf8f5; background: #173437; border-left: 5px solid #efb13d; font-family: ui-monospace, monospace; overflow-x: auto; white-space: pre; }
+    footer { padding: 28px 0; color: var(--muted); background: var(--band); }
+    @media (max-width: 720px) {
+      header { padding-top: 36px; }
+      h1 { font-size: 30px; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>PiPlus Soccer × BFM：足球状态扩展与训练实施方案</h1>
+      <p>面向 PiPlus_S_12L8A0G2H0W 的对象条件 BFM 训练设计。本文记录已经确认的仓库事实、足球轨迹契约、无球能力保留方案、阶段门禁及后续会话接手信息。</p>
+    </div>
+  </header>
+
+  <nav aria-label="文档目录">
+    <div class="inner">
+      <a href="#summary">方案结论</a>
+      <a href="#baseline">当前基线</a>
+      <a href="#source">足球源任务</a>
+      <a href="#state">状态定义</a>
+      <a href="#schema">轨迹契约</a>
+      <a href="#placeholder">无球兼容</a>
+      <a href="#architecture">框架改造</a>
+      <a href="#stages">实施阶段</a>
+      <a href="#gates">验收指标</a>
+      <a href="#decisions">决策风险</a>
+      <a href="#handoff">会话接手</a>
+    </div>
+  </nav>
+
+  <main>
+    <section id="summary">
+      <h2>1. 方案结论</h2>
+      <p>目标是把足球作为一个外部刚体加入 BFM 的状态，而策略动作仍然是 PiPlus 的关节目标。训练状态从纯机器人状态 <code>s_robot</code> 扩展为：</p>
+      <div class="flow">s_t = [ robot_state_t, ball_state_t, command_t, object_active_t ]
+a_t = robot_joint_action_t
+s_(t+1) = simulator_step(s_t, a_t)</div>
+      <p>在这个定义下，策略可以学习“当前机器人—足球联合状态经过动作后如何转移”，并用包含足球目标的状态切片或目标条件来查询动作。这个方向是可行的，但不能只在 pkl 末尾机械追加 6 个数：环境、观测编码器、专家 buffer、目标状态、评估和渲染必须共享同一对象状态契约。</p>
+
+      <div class="note"><strong>推荐路线：</strong>以已经接入 UFO 的 H0W 为唯一足球主型号；使用现有 <code>piplus_soccer</code> 策略和采集器生成同步机器人—足球轨迹；先做纯盘带，再做踢球，最后混合。原有 LaFAN 轨迹通过 <code>object_active=0</code> 保留，而不是用一个未标记的“假球”污染状态转移。</div>
+      <div class="stop"><strong>当前边界：</strong>截至 2026-07-24，UFO 仓库中只完成了 H0W 无球模型、动作数据、smoke 和轨迹 MP4 渲染。足球刚体、足球观测和足球训练尚未接入。</div>
+
+      <h3>1.1 对最初两个想法的判断</h3>
+      <table>
+        <thead><tr><th>想法</th><th>判断</th><th>工程化修正</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>用带球/踢球策略生成机器人和足球联合轨迹，让 BFM 学会对象条件状态转移</td>
+            <td><span class="status">可行，且是主路线</span></td>
+            <td>必须保证球状态、机器人状态、action 和 command 同帧；BFM 状态编码和目标条件需要显式增加对象分支；物理转移仍由在线模拟器产生，专家轨迹提供覆盖与先验。</td>
+          </tr>
+          <tr>
+            <td>给旧 pkl 手动加入一个放在远处的固定足球，保持本体运动能力</td>
+            <td><span class="todo">有条件可用</span></td>
+            <td>必须增加 <code>object_active/ball_valid</code> mask 并屏蔽足球相关损失。若没有 mask，模型会把“足球永远冻结在远处”学成真实动力学，且固定在机器人坐标系会违反物理一致性。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="baseline">
+      <h2>2. 当前仓库基线</h2>
+      <table>
+        <thead><tr><th>型号/内容</th><th>仓库位置</th><th>确认事实</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>PiPlus H1W（现有 BFM 型号）</td>
+            <td><code>configs/robots/piplus_bfm.yaml</code><br><code>humanoidverse/data/robots/piplus/</code></td>
+            <td>PiPlus_S_12L8A0G2H1W_LSE_260424；23 DOF，含 <code>waist_yaw_joint</code>；<code>nq=30, nv=29</code>，28 个非 world body。</td>
+          </tr>
+          <tr>
+            <td>PiPlus H0W（足球主型号）</td>
+            <td><code>configs/robots/piplus_h0w.yaml</code><br><code>humanoidverse/data/robots/piplus_h0w/</code></td>
+            <td>PiPlus_S_12L8A0G2H0W；22 DOF，无腰部关节；<code>nq=29, nv=28</code>，27 个非 world body；模型与 PD 来源已对齐 <code>piplus_soccer</code>。</td>
+          </tr>
+          <tr>
+            <td>H1W LaFAN</td>
+            <td><code>configs/data/piplus_lafan.yaml</code></td>
+            <td>40 条完整推理动作，30 fps；训练数据为约 10 秒 clips。</td>
+          </tr>
+          <tr>
+            <td>H0W LaFAN</td>
+            <td><code>configs/data/piplus_h0w_lafan.yaml</code></td>
+            <td>869 条训练 clips、41 条完整动作、30 fps；数据根目录可由 <code>PIPLUS_H0W_MOTION_DIR</code> 覆盖。</td>
+          </tr>
+          <tr>
+            <td>专家轨迹 MP4</td>
+            <td><code>render_motion.sh</code><br><code>humanoidverse/render_motion.py</code></td>
+            <td>两个型号均已验证；按 joint name 映射到各自 qpos；共享 renderer 已避免重复地面造成的 z-fighting。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warn"><strong>型号不能混用：</strong>足球源任务使用 H0W。H1W 多一个腰部关节，且控制关节顺序不同；H1W 动作不能直接作为 H0W 足球数据，除非经过明确的关节映射/重定向并重新验证。</div>
+    </section>
+
+    <section id="source">
+      <h2>3. 已确认的足球源任务</h2>
+      <table>
+        <thead><tr><th>项目</th><th>位置/值</th></tr></thead>
+        <tbody>
+          <tr><td>Conda 环境</td><td><code>env_soccer</code></td></tr>
+          <tr><td>任务目录</td><td><code>/home/cato/projects/piplus_soccer/source/HT_lab/HT_lab/tasks/piplus_soccer</code></td></tr>
+          <tr><td>机器人</td><td><code>PiPlus_S_12L8A0G2H0W</code>，硬件描述来自 <code>ht_urdf</code></td></tr>
+          <tr><td>任务类型</td><td>dribble / run / kick 混合 AMP 任务；当前 command 支持三种 mode</td></tr>
+          <tr><td>足球物理</td><td>半径 0.07 m，质量 0.20 kg；static friction 0.8，dynamic friction 0.6，restitution 0.82；linear damping 0.1，angular damping 0.05</td></tr>
+          <tr><td>仿真频率</td><td><code>sim.dt=0.005</code>，decimation=4，策略频率 50 Hz；采集文件需以实际 <code>framerate</code> 为准</td></tr>
+          <tr><td>足球接触</td><td>左右 <code>ankle_roll_link</code> 分别有球过滤 contact sensor</td></tr>
+          <tr><td>采集 schema</td><td><code>piplus_soccer_motion_v3</code></td></tr>
+        </tbody>
+      </table>
+
+      <h3>3.1 源任务的 7 维 command</h3>
+      <pre><code>[ball_x_b, ball_y_b,
+ target_vel_x_b, target_vel_y_b,
+ target_ball_pos_x_b, target_ball_pos_y_b,
+ mode]</code></pre>
+      <ul>
+        <li><code>mode=0</code>：dribble。</li>
+        <li><code>mode=1</code>：run。</li>
+        <li><code>mode=2</code>：kick。</li>
+        <li><code>_b</code> 字段为机器人局部/基座坐标系表达；采集器还保存 world frame 球状态。</li>
+      </ul>
+
+      <h3>3.2 已存在的采集入口</h3>
+      <table>
+        <thead><tr><th>脚本</th><th>用途</th><th>关键行为</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><code>tasks/piplus_soccer/scripts/rec_motion.py</code></td>
+            <td>盘带/接球控制轨迹</td>
+            <td>强制 dribble mode，记录来球、足球接触、停止确认和控制口袋目标。</td>
+          </tr>
+          <tr>
+            <td><code>tasks/piplus_soccer/scripts/kick_motion.py</code></td>
+            <td>kick-only 轨迹</td>
+            <td>记录首次足球接触和接触后阶段；支持 NPZ replay 与 MP4。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="info"><strong>实施含义：</strong>第一版不重新写 Isaac Lab 采集器。先复用这两个脚本批量生成 v3 NPZ，再在 UFO 中实现一个严格 adapter，将其转换为统一的 soccer motion pkl。</div>
+    </section>
+
+    <section id="state">
+      <h2>4. BFM 足球状态定义</h2>
+      <h3>4.1 原始可回放状态（数据层）</h3>
+      <p>数据层应保留能够完整回放和检查物理一致性的状态。推荐最小集合：</p>
+      <table>
+        <thead><tr><th>分组</th><th>字段</th><th>shape</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td>机器人</td><td><code>root_trans_offset</code></td><td><code>[T,3]</code></td><td>米，z-up，环境局部 world frame</td></tr>
+          <tr><td>机器人</td><td><code>root_rot</code></td><td><code>[T,4]</code></td><td>UFO 统一使用 xyzw</td></tr>
+          <tr><td>机器人</td><td><code>dof / dof_pos</code></td><td><code>[T,22]</code></td><td>H0W control-joint 顺序，弧度</td></tr>
+          <tr><td>机器人</td><td><code>pose_aa</code></td><td><code>[T,27,3]</code></td><td>与 H0W 非 world body 顺序一致</td></tr>
+          <tr><td>足球</td><td><code>ball_pos_w</code></td><td><code>[T,3]</code></td><td>球心世界位置，米</td></tr>
+          <tr><td>足球</td><td><code>ball_quat_w</code></td><td><code>[T,4]</code></td><td>用于完整回放；必须记录四元数顺序元数据</td></tr>
+          <tr><td>足球</td><td><code>ball_lin_vel_w</code></td><td><code>[T,3]</code></td><td>m/s</td></tr>
+          <tr><td>足球</td><td><code>ball_ang_vel_w</code></td><td><code>[T,3]</code></td><td>rad/s，旋转/摩擦研究需要</td></tr>
+          <tr><td>任务</td><td><code>command</code></td><td><code>[T,7]</code></td><td>保留源任务 command，mode 必须取 0/1/2</td></tr>
+          <tr><td>接触</td><td><code>foot_ball_contact</code></td><td><code>[T,2]</code></td><td>左/右足布尔接触</td></tr>
+          <tr><td>接触</td><td><code>foot_ball_contact_force</code></td><td><code>[T,2]</code></td><td>接触力标量或约定后的 norm</td></tr>
+          <tr><td>兼容</td><td><code>object_active</code></td><td><code>[T,1]</code></td><td>真实足球轨迹为 1，无球兼容轨迹为 0</td></tr>
+        </tbody>
+      </table>
+
+      <h3>4.2 策略/表示学习状态（模型层）</h3>
+      <p>策略不应直接依赖绝对 world xy。推荐将足球状态转为机器人 yaw 对齐坐标系，减少平移和航向变化：</p>
+      <pre><code>ball_features = [
+  ball_pos_yaw_frame_xyz,       # 3
+  ball_lin_vel_yaw_frame_xyz,   # 3
+  ball_ang_vel_yaw_frame_xyz,   # 3，可在第一版消融
+  left_right_contact,           # 2
+  object_active                 # 1
+]
+
+command_features = [
+  target_vel_xy,                # 2
+  target_ball_pos_xy,           # 2
+  mode_one_hot                  # 3，模型中不要直接把 0/1/2 当连续数
+]</code></pre>
+      <p>球是近似球对称刚体，第一版策略观测可以不输入 <code>ball_quat</code>，但原始数据必须保留。角速度是否输入应做消融：盘带方向控制通常需要线速度，球 spin 对低速控球的增益需要实测。</p>
+
+      <h3>4.3 目标状态切片</h3>
+      <p>不能只给“目标球位置”而不约束机器人。建议分两类目标：</p>
+      <ul>
+        <li><strong>盘带目标：</strong>目标球局部位置、目标球速度、mode；机器人姿态由技能先验和稳定性约束保持。</li>
+        <li><strong>踢球目标：</strong>目标球速度向量或方向+速度、mode；附带接触后稳定目标，避免策略只追求球速而摔倒。</li>
+      </ul>
+      <div class="warn">如果目标只包含最终球状态，多个动作序列都可能满足目标，且有些是跌倒式踢球。训练目标和评估必须同时包含机器人存活/稳定性。</div>
+    </section>
+
+    <section id="schema">
+      <h2>5. 统一足球轨迹契约</h2>
+      <h3>5.1 推荐容器</h3>
+      <p>沿用 UFO 的 <code>dict[motion_key, record]</code> pkl，每个 record 在标准机器人字段上增加 soccer 字段。建议 schema 名称：</p>
+      <pre><code>schema_version: ufo_piplus_soccer_v1
+robot_config: configs/robots/piplus_h0w.yaml
+source_schema: piplus_soccer_motion_v3
+ball:
+  radius_m: 0.07
+  mass_kg: 0.20
+  quat_order: wxyz | xyzw   # adapter 输出必须固定并写清
+  state_frame: env_local_world
+command:
+  layout: [ball_x_b, ball_y_b, target_vel_x_b, target_vel_y_b,
+           target_ball_pos_x_b, target_ball_pos_y_b, mode]</code></pre>
+
+      <h3>5.2 NPZ → UFO soccer adapter 的职责</h3>
+      <ol>
+        <li>读取 v3 NPZ，拒绝 object pickle 和缺失关键字段。</li>
+        <li>根据 <code>joint_names</code> 重排到 H0W 的 22 关节顺序；不允许仅按列数猜测。</li>
+        <li>统一 root/ball 四元数顺序，验证单位范数。</li>
+        <li>检查所有时序字段共享相同 T，且无 NaN/Inf。</li>
+        <li>将 Isaac 环境 origin 去除后的 world frame 定义写入 metadata。</li>
+        <li>生成/验证 <code>pose_aa [T,27,3]</code>；若源 NPZ 已有 body state，优先从其构造，不能伪造。</li>
+        <li>保留 action。若采集的 <code>actions</code> 是归一化策略 action，必须记录其 scale 和含义；不要把 joint position 当作 action。</li>
+        <li>分别输出完整序列和接近 10 秒训练 clips，并生成 SHA-256、数量、总帧数、fps 分布。</li>
+      </ol>
+
+      <div class="stop"><strong>关键缺口：</strong>标准 UFO 动作文件主要保存状态，现有足球采集器还保存 policy action。要学习联合状态转移，adapter 与训练 buffer 必须明确使用真正施加的 <code>a_t</code>；只保存 <code>q_t</code> 和 <code>q_(t+1)</code> 不足以监督 action-conditioned transition。</div>
+
+      <h3>5.3 推荐数据分层</h3>
+      <pre><code>piplus_h0w_soccer/
+├── raw_npz/                     # piplus_soccer_motion_v3，永不覆盖
+├── full/
+│   ├── dribble_full.pkl
+│   └── kick_full.pkl
+├── train/
+│   ├── dribble_10s-clipped.pkl
+│   └── kick_10s-clipped.pkl
+├── manifests/
+└── SHA256SUMS</code></pre>
+    </section>
+
+    <section id="placeholder">
+      <h2>6. 保留本体能力：无球轨迹兼容方案</h2>
+      <h3>6.1 推荐方案：inactive object + mask</h3>
+      <p>对现有 H0W LaFAN 轨迹增加统一 soccer 字段，但标记为无球：</p>
+      <pre><code>object_active = 0
+ball_pos_w = root_pos_at_clip_start + [R*cos(theta), R*sin(theta), 0.07]
+ball_lin_vel_w = 0
+ball_ang_vel_w = 0
+foot_ball_contact = 0
+command = 0</code></pre>
+      <ul>
+        <li><code>R</code> 建议在安全范围随机采样，例如 2.5–4.0 m；<code>theta</code> 每 clip 随机，避免固定方向偏置。</li>
+        <li>球位置固定在 world frame，而不是每帧跟随机器人。后者会产生不可能的无作用力跟随运动。</li>
+        <li>模型输入保留 <code>object_active</code>；对象重建、对象转移、足球目标和接触 loss 对 inactive 样本全部 mask。</li>
+        <li>机器人状态、动作和原 BFM loss 正常计算，因此旧动作继续维持走、跑、跳、转向等本体能力。</li>
+      </ul>
+
+      <h3>6.2 不推荐方案：未标记的远处固定球</h3>
+      <p>如果只是追加球位置/速度且没有 mask，模型会得到大量“球不遵守物理、永远静止”的样本。其数量通常远多于足球轨迹，会压制对象动力学学习。这个方法只能作为非常短期的 schema smoke，不能作为正式训练数据。</p>
+
+      <h3>6.3 数据混合</h3>
+      <p>第一轮必须保留独立 source 权重，而不是把所有 clips 合并后均匀采样。建议至少区分：</p>
+      <ul>
+        <li><code>locomotion_no_ball</code>：原 H0W LaFAN，object inactive。</li>
+        <li><code>dribble_ball</code>：盘带/接球/推球。</li>
+        <li><code>kick_ball</code>：首次触球前后完整片段。</li>
+      </ul>
+      <p>初始权重不在本文锁死，应通过三组消融确定。最低要求是记录每次训练的实际 source sampling ratio，并分别报告无球和足球指标。</p>
+    </section>
+
+    <section id="architecture">
+      <h2>7. UFO/BFM 需要的代码改造</h2>
+      <div class="flow">soccer rigid body in MJLab
+        ↓
+robot + ball synchronized environment state
+        ↓
+robot encoder ─┐
+ball encoder  ─┼─→ fused state representation → FB/BFM agent
+command encoder┘
+        ↓
+22-D robot action → simulator → next robot + ball state</div>
+
+      <table>
+        <thead><tr><th>模块</th><th>需要增加的能力</th><th>门禁</th></tr></thead>
+        <tbody>
+          <tr><td>机器人/场景资产</td><td>H0W MJCF/MJLab scene 中加入一个 free ball；物理参数与源任务一致；每环境一个球。</td><td>静止、自由落体、滚动、碰撞测试。</td></tr>
+          <tr><td>观测</td><td>输出 yaw-frame 球位置/线速度/可选角速度、contact、command、object mask；支持 history。</td><td>旋转/平移不变性数值测试。</td></tr>
+          <tr><td>Motion adapter</td><td>v3 NPZ → UFO soccer pkl；生成 joint/body/action/object 严格 schema。</td><td>hash、shape、fps、joint order、回放 MP4。</td></tr>
+          <tr><td>MotionLib/专家 loader</td><td>在机器人 motion state 之外返回同步球状态、command、contact 和 action。</td><td>随机抽帧与源 NPZ 一致。</td></tr>
+          <tr><td>Replay buffer</td><td>保存 <code>(s_robot, s_ball, command, mask, action, s_next)</code>；inactive mask 不丢失。</td><td>采样前后 tensor 逐项一致。</td></tr>
+          <tr><td>模型</td><td>优先使用 robot/object/command 分支编码后融合；不要立即把所有字段平铺到旧 encoder。</td><td>无球 checkpoint/初始化迁移策略明确。</td></tr>
+          <tr><td>目标条件</td><td>允许目标切片包含球局部位置/速度和 mode；踢球含接触后稳定约束。</td><td>人工构造目标能产生有限且不同的 latent/action。</td></tr>
+          <tr><td>评估与渲染</td><td>同时渲染机器人、球、目标箭头；输出无球和足球独立指标。</td><td>MP4 无错位，指标可复现。</td></tr>
+        </tbody>
+      </table>
+
+      <h3>7.1 编码器兼容策略</h3>
+      <p>为了尽量保存已学到的本体表示，第一版推荐：</p>
+      <ol>
+        <li>保留现有 robot encoder 的输入与参数布局。</li>
+        <li>新增轻量 ball encoder 和 command encoder。</li>
+        <li>融合层从“原 robot latent + 零对象 latent”初始化为接近旧行为。</li>
+        <li>先短期冻结或降低 robot encoder 学习率，仅训练新增分支和融合层；之后再联合微调。</li>
+        <li>每个阶段持续跑原 LaFAN tracking/稳定性回归，防止足球 loss 造成灾难性遗忘。</li>
+      </ol>
+    </section>
+
+    <section id="stages">
+      <h2>8. 分阶段实施路线</h2>
+      <table>
+        <thead><tr><th>阶段</th><th>工作</th><th>退出条件</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>阶段 0<br><span class="status">已完成</span></td>
+            <td>H0W 资产、22 DOF 配置、LaFAN manifest、强校验、单卡 smoke、两个 PiPlus 专家 MP4。</td>
+            <td>H0W 无球基线稳定可运行。</td>
+          </tr>
+          <tr>
+            <td>阶段 1<br><span class="todo">下一步</span></td>
+            <td>审计 v3 NPZ；实现 soccer schema、adapter、validator；扩展 renderer 同时画机器人和球。</td>
+            <td>至少一条 dribble 和一条 kick 轨迹在 UFO 中逐帧回放，球与脚接触时刻对齐。</td>
+          </tr>
+          <tr>
+            <td>阶段 2</td>
+            <td>MJLab 场景加入足球刚体；实现 reset、状态读取、局部坐标转换和 contact。</td>
+            <td>多环境 smoke 无 NaN；球自由落体、滚动、足球碰撞物理合理。</td>
+          </tr>
+          <tr>
+            <td>阶段 3</td>
+            <td>为 LaFAN 添加 inactive object 字段；扩展 buffer 和观测，但先关闭足球 loss。</td>
+            <td>与无球 H0W baseline 相比，动作/观测维度正确，本体指标没有显著下降。</td>
+          </tr>
+          <tr>
+            <td>阶段 4</td>
+            <td>引入真实 soccer transitions；完成 object encoder、command encoder 和 masked loss。</td>
+            <td>记录 action 的一步转移 sanity test 通过；真实球样本的对象 loss 明显下降。</td>
+          </tr>
+          <tr>
+            <td>阶段 5</td>
+            <td>只训练 dribble：静止球 → 低速来球 → 多方向与目标速度 curriculum。</td>
+            <td>机器人不摔倒，球长期保持在控制口袋，速度方向可控。</td>
+          </tr>
+          <tr>
+            <td>阶段 6</td>
+            <td>只训练 kick：固定方向/速度 → 多方向/速度；加入接触后稳定。</td>
+            <td>首次触球、球速、方向误差和接触后存活达到门槛。</td>
+          </tr>
+          <tr>
+            <td>阶段 7</td>
+            <td>混合 locomotion / dribble / kick；调 source 权重、curriculum 和遗忘抑制。</td>
+            <td>足球能力与原本体能力同时通过回归。</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="warn"><strong>不要一步到位混合三种 mode。</strong>盘带和踢球的目标、接触结构和时间尺度不同。先分别证明 state/action/object 管线正确，再混合，调试成本最低。</div>
+    </section>
+
+    <section id="gates">
+      <h2>9. 验收门禁与指标</h2>
+      <h3>9.1 数据门禁</h3>
+      <ul>
+        <li>所有时序 tensor 的 T 完全一致；fps 正数且实际播放时长一致。</li>
+        <li>22 个 <code>joint_names</code> 与 <code>configs/robots/piplus_h0w.yaml</code> 完全一致。</li>
+        <li>四元数单位范数；root 与 ball 的 quaternion order 有显式 metadata。</li>
+        <li>球位置/速度 world↔body 变换可逆，误差在浮点容差内。</li>
+        <li>action 含义明确且与训练环境 action scale 一致。</li>
+        <li>轨迹 MP4 中足球接触帧与 <code>foot_ball_contact</code> 对齐。</li>
+      </ul>
+
+      <h3>9.2 环境门禁</h3>
+      <ul>
+        <li>单环境 deterministic replay：记录状态写回模拟器后，机器人和球位置误差可控。</li>
+        <li>多环境 reset 后球不串环境，不与地面穿透，不在初始帧爆炸。</li>
+        <li>观测、reward、action、next state 全部 finite。</li>
+        <li>禁用 DR 时重复 seed 可复现；启用 DR 时球质量/摩擦范围被记录。</li>
+      </ul>
+
+      <h3>9.3 训练/任务指标</h3>
+      <table>
+        <thead><tr><th>能力</th><th>核心指标</th><th>辅助指标</th></tr></thead>
+        <tbody>
+          <tr><td>本体保留</td><td>原 LaFAN tracking、episode survival、跌倒率</td><td>关节限位、力矩、滑脚、动作平滑度</td></tr>
+          <tr><td>盘带</td><td>球到目标控制口袋误差、球速度向量误差、连续控球时间</td><td>额外触球次数、左右脚使用率、机器人速度</td></tr>
+          <tr><td>踢球</td><td>首次触球后球速、方向角误差、成功率</td><td>首次触球时间、重复触球、接触后存活与姿态恢复</td></tr>
+          <tr><td>表示/转移</td><td>held-out 一步对象状态误差、目标条件成功率</td><td>不同目标的 latent/action 可分性</td></tr>
+        </tbody>
+      </table>
+      <p>具体数值门槛应由无球 baseline 和源 soccer policy 的评估结果确定。不要在没有 baseline 分布时任意写一个成功率。</p>
+    </section>
+
+    <section id="decisions">
+      <h2>10. 已决策、待决策与主要风险</h2>
+      <h3>10.1 已决策</h3>
+      <ul>
+        <li>足球训练主型号为 H0W，不以 H1W 直接代替。</li>
+        <li>优先复用 <code>piplus_soccer_motion_v3</code> 采集器。</li>
+        <li>对象状态采用局部不变特征进入模型，world state 保留用于回放。</li>
+        <li>无球轨迹使用 <code>object_active</code> mask。</li>
+        <li>盘带与踢球先分开训练和验收。</li>
+      </ul>
+
+      <h3>10.2 实现前必须确认</h3>
+      <ul>
+        <li>足球 collector 输出的 <code>actions</code> 是归一化 policy action、PD target offset，还是最终 joint target。</li>
+        <li>source NPZ 的 <code>base_quat_w</code> 和 <code>ball_quat_w</code> 精确顺序。</li>
+        <li>UFO soccer 第一版是否需要 ball angular velocity 进入策略观测。</li>
+        <li>目标状态是直接扩展现有 <code>max_local_self</code>，还是创建独立 object-goal 字段。</li>
+        <li>在线训练的专家轨迹权重与 LaFAN 权重如何做第一轮消融。</li>
+      </ul>
+
+      <h3>10.3 主要风险</h3>
+      <table>
+        <thead><tr><th>风险</th><th>表现</th><th>缓解</th></tr></thead>
+        <tbody>
+          <tr><td>坐标系错位</td><td>球在回放中漂移、镜像或速度方向错误</td><td>world/body 往返测试 + 接触帧视频检查</td></tr>
+          <tr><td>action 语义错误</td><td>离线 transition 无法复现</td><td>记录最终施加 action 与 scale，做一步 simulator replay</td></tr>
+          <tr><td>无球数据压制球动力学</td><td>策略忽略球或预测球静止</td><td>object mask、独立 source 权重、按 source 报 loss</td></tr>
+          <tr><td>灾难性遗忘</td><td>学会触球但走路/平衡退化</td><td>分支 encoder、低学习率/冻结、LaFAN 混合和持续回归</td></tr>
+          <tr><td>投机踢球</td><td>摔倒或多次乱碰也获得高球速</td><td>首次接触事件、方向 reward、重复触球惩罚、接触后稳定门禁</td></tr>
+          <tr><td>物理域差异</td><td>源 Isaac Lab 轨迹在 MJLab/MuJoCo 中不可复现</td><td>先做 state replay，再做 action replay；对齐球质量、半径、摩擦、恢复系数和控制频率</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="handoff">
+      <h2>11. 后续会话接手说明</h2>
+      <p>后续与 Codex/其他开发者继续时，建议使用以下开场：</p>
+      <pre><code>请先完整阅读 docs/piplus_soccer_bfm_plan_zh.html。
+以其中“已确认事实、轨迹契约、阶段门禁、已决策/待决策”为当前方案基线。
+不要跳过阶段门禁，也不要把 H1W 和 H0W 数据直接混用。
+当前准备执行：阶段 X（写明本次目标）。</code></pre>
+
+      <h3>11.1 接手者必须先看的仓库文件</h3>
+      <ul>
+        <li><code>configs/robots/piplus_h0w.yaml</code></li>
+        <li><code>configs/data/piplus_h0w_lafan.yaml</code></li>
+        <li><code>humanoidverse/config/robot/piplus/piplus_h0w.yaml</code></li>
+        <li><code>humanoidverse/data/robots/piplus_h0w/ASSET_PROVENANCE.md</code></li>
+        <li><code>humanoidverse/tools/validate_bfm_setup.py</code></li>
+        <li><code>humanoidverse/render_motion.py</code></li>
+        <li><code>tests/test_piplus_h0w_setup.py</code></li>
+        <li><code>tests/test_render_motion.py</code></li>
+      </ul>
+
+      <h3>11.2 接手者必须先看的外部源文件</h3>
+      <ul>
+        <li><code>/home/cato/projects/piplus_soccer/source/HT_lab/HT_lab/tasks/piplus_soccer/config/piplus_soccer_env_cfg.py</code></li>
+        <li><code>/home/cato/projects/piplus_soccer/source/HT_lab/HT_lab/tasks/piplus_soccer/scripts/rec_motion.py</code></li>
+        <li><code>/home/cato/projects/piplus_soccer/source/HT_lab/HT_lab/tasks/piplus_soccer/scripts/kick_motion.py</code></li>
+        <li><code>/home/cato/projects/piplus_soccer/source/HT_lab/HT_lab/assets/soccer_ball.py</code></li>
+      </ul>
+
+      <h3>11.3 当前推荐的下一任务</h3>
+      <p><span class="todo">阶段 1：</span>收集一条 dribble v3 NPZ 和一条 kick v3 NPZ，审计所有 key/shape/quaternion/action 语义；随后实现只读 validator 和机器人+足球联合 MP4 回放。先证明数据正确，再改训练环境。</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="inner">
+      文档版本：2026-07-24 · 状态：方案基线 v1 · 目标仓库：<code>/home/cato/projects/UFO-main</code>
+    </div>
+  </footer>
+</body>
+</html>

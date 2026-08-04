@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PiPlus BFM-Zero 8x RTX 4090 训练手册</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #182126;
+      --muted: #56636a;
+      --line: #cbd5d8;
+      --paper: #fff;
+      --band: #eef3f2;
+      --accent: #006b5f;
+      --accent-soft: #dff3ee;
+      --warm: #9a5709;
+      --warm-soft: #fff2d2;
+      --danger: #9d2d31;
+      --danger-soft: #fde8e8;
+      --code: #102023;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.72;
+      letter-spacing: 0;
+    }
+    header { padding: 52px 24px 40px; color: #f8fffd; background: #153b3a; border-bottom: 6px solid #efb13d; }
+    header .inner, nav .inner, main, footer .inner { width: min(1120px, calc(100% - 40px)); margin: 0 auto; }
+    h1 { margin: 0 0 12px; font-size: clamp(30px, 4vw, 46px); line-height: 1.2; }
+    header p { max-width: 900px; margin: 0; color: #d8ebe7; font-size: 18px; }
+    nav { position: sticky; top: 0; z-index: 3; overflow-x: auto; background: #fff; border-bottom: 1px solid var(--line); }
+    nav .inner { display: flex; gap: 21px; padding: 12px 0; white-space: nowrap; }
+    nav a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    main { padding: 30px 0 64px; }
+    section { padding: 27px 0; border-bottom: 1px solid var(--line); }
+    h2 { margin: 0 0 14px; color: #123f3b; font-size: 27px; }
+    h3 { margin: 24px 0 8px; font-size: 20px; }
+    p, ul, ol { margin-top: 8px; margin-bottom: 14px; }
+    li + li { margin-top: 6px; }
+    code { padding: 2px 5px; color: #064e48; background: #e9f2f0; border-radius: 3px; font-family: ui-monospace, monospace; }
+    pre { overflow-x: auto; margin: 14px 0; padding: 16px; color: #edf9f6; background: var(--code); border-left: 4px solid #4fc3ad; border-radius: 4px; line-height: 1.55; }
+    pre code { padding: 0; color: inherit; background: transparent; }
+    table { width: 100%; margin: 16px 0; border-collapse: collapse; }
+    th, td { padding: 11px 12px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
+    th { color: #143b38; background: var(--band); }
+    .note, .warn, .stop { margin: 16px 0; padding: 14px 16px; border-left: 5px solid var(--accent); background: var(--accent-soft); }
+    .warn { border-color: var(--warm); background: var(--warm-soft); }
+    .stop { border-color: var(--danger); background: var(--danger-soft); }
+    .ok { color: var(--accent); font-weight: 800; }
+    footer { padding: 28px 0; color: var(--muted); background: var(--band); }
+    @media (max-width: 720px) {
+      header { padding-top: 36px; }
+      h1 { font-size: 30px; }
+      table { display: block; overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>PiPlus BFM-Zero：8× RTX 4090 训练手册</h1>
+      <p>从服务器初始化、PiPlus 资产与专家数据校验，到单卡/八卡门禁、正式训练、监控、断点恢复和 tracking inference 的完整操作流程。</p>
+    </div>
+  </header>
+  <nav aria-label="文档目录">
+    <div class="inner">
+      <a href="#contract">已迁移契约</a>
+      <a href="#server">服务器准备</a>
+      <a href="#data">部署与校验</a>
+      <a href="#gates">训练门禁</a>
+      <a href="#train">正式训练</a>
+      <a href="#operate">监控恢复</a>
+      <a href="#inference">推理验收</a>
+    </div>
+  </nav>
+  <main>
+    <section id="contract">
+      <h2>1. 本仓库中的 PiPlus 训练契约</h2>
+      <table>
+        <thead><tr><th>内容</th><th>位置</th><th>固定事实</th></tr></thead>
+        <tbody>
+          <tr><td>训练 MJCF 与 mesh</td><td><code>humanoidverse/data/robots/piplus/</code></td><td>nq=30，nv=29，23 actuator，28 个非 world body</td></tr>
+          <tr><td>机器人训练规范</td><td><code>configs/robots/piplus_bfm.yaml</code></td><td>23-DOF 顺序、PD、限位、默认姿态、语义 body</td></tr>
+          <tr><td>Hydra 机器人配置</td><td><code>humanoidverse/config/robot/piplus/piplus_bfm.yaml</code></td><td>由源 PiPlus BFM preset 迁移，资产路径改为仓库内相对路径</td></tr>
+          <tr><td>专家数据 manifest</td><td><code>configs/data/piplus_lafan.yaml</code></td><td>训练 862 clips，推理 40 full motions，30 fps，23 DOF</td></tr>
+          <tr><td>强校验入口</td><td><code>humanoidverse.tools.validate_bfm_setup</code></td><td>校验 hash、shape、有限值、单位四元数和关节顺序</td></tr>
+        </tbody>
+      </table>
+      <div class="note">PiPlus 源实验的 <code>lie_down_init=true</code> 和 0.3 概率已通过 robot config 的 Hydra overrides 保留。BFM-Zero 算法仍走 UFO 的共享训练入口。</div>
+    </section>
+
+    <section id="server">
+      <h2>2. 8×4090 服务器准备</h2>
+      <h3>2.1 硬件与目录</h3>
+      <ul>
+        <li>8 张 RTX 4090，每张 24 GiB；单机 8 卡，GPU 间通常通过 PCIe/NCCL 通信。</li>
+        <li>建议至少 128 GiB 系统内存、16 个以上 CPU 核和 200 GiB 以上本地 NVMe 空间；多次实验需预留更多空间。</li>
+        <li>专家数据只有约 372 MiB，训练前复制到节点本地 NVMe，避免 8 个 rank 并发读取网络盘。</li>
+        <li>工作目录必须放在高速盘。8 卡 checkpoint 会保存 8 份 rank-local replay buffer；磁盘容量按 buffer 大小近似线性增长。</li>
+      </ul>
+      <div class="warn"><strong>容量参考：</strong>源仓库单卡 256 万 transition 的 buffer checkpoint 约 11 GiB；八卡同配置仅 buffer 就约 88 GiB，模型和优化器还会额外占用数 GiB。本手册用每卡 128 万作为 24 GiB 4090 的保守起点。</div>
+      <h3>2.2 驱动、拓扑和时钟检查</h3>
+      <pre><code>nvidia-smi
+nvidia-smi topo -m
+nvidia-smi --query-gpu=index,name,driver_version,memory.total,memory.free,pstate,temperature.gpu \
+  --format=csv,noheader
+
+# 所有卡都应显示 RTX 4090、约 24564 MiB，并且没有遗留计算进程。
+nvidia-smi --query-compute-apps=gpu_uuid,pid,process_name,used_memory --format=csv</code></pre>
+      <p>服务器无需依赖源仓库的 Conda 环境；本项目由 <code>uv.lock</code> 固定 Python 依赖。NVIDIA 驱动必须能运行锁文件安装的 PyTorch CUDA runtime。</p>
+    </section>
+
+    <section id="data">
+      <h2>3. 部署源码、环境和专家数据</h2>
+      <h3>3.1 建议目录</h3>
+      <pre><code>/local_nvme/ufo/
+├── src/                         # 当前 UFO 仓库
+├── data/piplus/
+│   ├── piplus_lse_lafan.pkl
+│   └── piplus_lse_lafan_10s-clipped.pkl
+├── runs/
+└── cache/</code></pre>
+      <h3>3.2 同步文件</h3>
+      <p>在有源文件的机器上执行，替换服务器地址：</p>
+      <pre><code>rsync -a --delete \
+  --exclude .venv --exclude cache --exclude runs \
+  /home/cato/projects/UFO-main/ user@server:/local_nvme/ufo/src/
+
+rsync -a \
+  /home/cato/Documents/HT_MotionData/lafan/pi_LSE_lafan_260706/*.pkl \
+  user@server:/local_nvme/ufo/data/piplus/</code></pre>
+      <div class="warn"><code>--delete</code> 只应对服务器专用的源码镜像目录使用，不能用于包含实验结果的 <code>runs/</code>。</div>
+      <h3>3.3 安装和环境变量</h3>
+      <pre><code>cd /local_nvme/ufo/src
+uv sync --frozen
+
+export PIPLUS_MOTION_DIR=/local_nvme/ufo/data/piplus
+export UFO_CACHE_DIR=/local_nvme/ufo/cache
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export NCCL_NVLS_ENABLE=0
+export PYTHONUNBUFFERED=1
+
+uv run python - &lt;&lt;'PY'
+import torch, mujoco, mjlab
+print("torch:", torch.__version__)
+print("torch CUDA runtime:", torch.version.cuda)
+print("CUDA available:", torch.cuda.is_available())
+print("GPU count:", torch.cuda.device_count())
+print("MuJoCo:", mujoco.__version__)
+print("MJLab:", mjlab.__version__ if hasattr(mjlab, "__version__") else "import ok")
+assert torch.cuda.is_available()
+assert torch.cuda.device_count() == 8
+for index in range(8):
+    capability = torch.cuda.get_device_capability(index)
+    value = torch.ones(1, device=f"cuda:{index}").sum().item()
+    print(f"GPU {index}: capability={capability}, CUDA kernel result={value}")
+    assert value == 1.0
+PY</code></pre>
+      <h3>3.4 PiPlus 强校验</h3>
+      <pre><code>uv run python -m humanoidverse.tools.validate_bfm_setup \
+  --robot-config configs/robots/piplus_bfm.yaml \
+  --data-manifest configs/data/piplus_lafan.yaml</code></pre>
+      <p>预期打印机器人 <code>actions=23 bodies=28</code>，训练集 <code>motions=862</code>，推理集 <code>motions=40</code>，两者 fps 都只有 30。任一 SHA-256、关节顺序或 shape 不一致都必须先修复。</p>
+    </section>
+
+    <section id="gates">
+      <h2>4. 扩到八卡前的训练门禁</h2>
+      <h3>4.1 单卡环境 smoke</h3>
+      <pre><code>CUDA_VISIBLE_DEVICES=0 \
+PIPLUS_MOTION_DIR=/local_nvme/ufo/data/piplus \
+./run_train.sh \
+  --agent fb \
+  --robot-config configs/robots/piplus_bfm.yaml \
+  --data-manifest configs/data/piplus_lafan.yaml \
+  --gpu-ids single \
+  --smoke \
+  --work-dir /local_nvme/ufo/runs/piplus_single_smoke</code></pre>
+      <p>这一步主要验证 MJLab 构建、MotionLib 载入、观测和 rollout。内置 smoke 只有 2048 global steps，不足以越过 10240 local seed steps，因此不作为 optimizer 更新验证。</p>
+      <h3>4.2 八卡 NCCL 与更新 smoke</h3>
+      <p>该命令会越过 seed 阶段并执行少量梯度同步；禁用耗时的 tracking prioritization，且每次只做 1 个 agent update。</p>
+      <pre><code>rm -rf /local_nvme/ufo/runs/piplus_8gpu_smoke
+
+CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7 \
+PIPLUS_MOTION_DIR=/local_nvme/ufo/data/piplus \
+NCCL_DEBUG=INFO \
+./run_train.sh \
+  --agent fb \
+  --robot-config configs/robots/piplus_bfm.yaml \
+  --data-manifest configs/data/piplus_lafan.yaml \
+  --gpu-ids all \
+  --num-envs 16 \
+  --num-env-steps 131072 \
+  --buffer-size 65536 \
+  --num-agent-updates 1 \
+  --checkpoint-every-steps 65536 \
+  --disable-eval-prioritization \
+  --work-dir /local_nvme/ufo/runs/piplus_8gpu_smoke</code></pre>
+      <p class="ok">通过标准：8 个 rank 全部初始化；日志显示 world_size=8；optimizer_steps 大于 0；checkpoint 下存在 model、train_status.json、distributed_sync.json 和 8 个 rank buffer；进程无 NaN、NCCL timeout 或 rank 提前退出。</p>
+      <pre><code>cat /local_nvme/ufo/runs/piplus_8gpu_smoke/checkpoint/train_status.json
+cat /local_nvme/ufo/runs/piplus_8gpu_smoke/checkpoint/distributed_sync.json
+find /local_nvme/ufo/runs/piplus_8gpu_smoke/checkpoint/buffers \
+  -maxdepth 1 -type d -name 'train_rank_*' | sort</code></pre>
+    </section>
+
+    <section id="train">
+      <h2>5. 正式训练</h2>
+      <h3>5.1 4090 起始参数</h3>
+      <table>
+        <thead><tr><th>参数</th><th>起始值</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td><code>--num-envs</code></td><td>512</td><td>每张 GPU 512，总并行环境 4096</td></tr>
+          <tr><td><code>--buffer-size</code></td><td>1280000</td><td>每张 GPU 的 replay 容量，总有效容量 1024 万</td></tr>
+          <tr><td><code>--num-env-steps</code></td><td>192000000</td><td>八卡合计的全局采样预算，不要再乘 8</td></tr>
+          <tr><td><code>--checkpoint-every-steps</code></td><td>3200000</td><td>按全局步数触发</td></tr>
+          <tr><td><code>--update-z-every-step</code></td><td>100</td><td>FB 默认值</td></tr>
+          <tr><td><code>--num-agent-updates</code></td><td>不覆盖</td><td>保留 FB preset 的 16，先建立可比较基线</td></tr>
+        </tbody>
+      </table>
+      <div class="note">若单卡峰值低于 20 GiB，可先把 <code>--buffer-size</code> 提到 1920000，再考虑增加环境数；每次只改一个参数并重新做短训。若 OOM，先降 buffer 到 960000，再降环境数到 384 或 256。</div>
+      <h3>5.2 使用 tmux 启动</h3>
+      <pre><code>tmux new -s piplus-bfm
+cd /local_nvme/ufo/src
+
+export PIPLUS_MOTION_DIR=/local_nvme/ufo/data/piplus
+export UFO_CACHE_DIR=/local_nvme/ufo/cache
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+export NCCL_NVLS_ENABLE=0
+export PYTHONUNBUFFERED=1
+
+# 可选 W&amp;B：先执行 uv run wandb login，并设置自己的 entity。
+export WANDB_ENTITY=your_entity
+RUN_DIR=/local_nvme/ufo/runs/piplus_bfm_fb_8x4090_seed4728
+
+./run_train.sh \
+  --agent fb \
+  --robot-config configs/robots/piplus_bfm.yaml \
+  --data-manifest configs/data/piplus_lafan.yaml \
+  --gpu-ids all \
+  --num-envs 512 \
+  --num-env-steps 192000000 \
+  --buffer-size 1280000 \
+  --checkpoint-every-steps 3200000 \
+  --update-z-every-step 100 \
+  --seed 4728 \
+  --work-dir "$RUN_DIR" \
+  --use-wandb \
+  --wandb-run-name piplus_bfm_fb_8x4090_seed4728 \
+  2&gt;&amp;1 | tee "$RUN_DIR.launch.log"</code></pre>
+      <p>退出 tmux 而不中止训练：按 <code>Ctrl-B</code>，再按 <code>D</code>。恢复终端：<code>tmux attach -t piplus-bfm</code>。</p>
+      <div class="stop"><strong>不要复用 smoke 的 work-dir。</strong>发现 checkpoint 时训练入口会自动恢复；正式实验必须使用新的空目录，防止意外继承调试模型或 replay buffer。</div>
+    </section>
+
+    <section id="operate">
+      <h2>6. 监控、故障定位与恢复</h2>
+      <h3>6.1 运行中检查</h3>
+      <pre><code>watch -n 2 'nvidia-smi --query-gpu=index,memory.used,utilization.gpu,temperature.gpu,power.draw --format=csv,noheader'
+tail -f /local_nvme/ufo/runs/piplus_bfm_fb_8x4090_seed4728/train_log.txt
+watch -n 30 'df -h /local_nvme; du -sh /local_nvme/ufo/runs/piplus_bfm_fb_8x4090_seed4728 2&gt;/dev/null'
+
+cat /local_nvme/ufo/runs/piplus_bfm_fb_8x4090_seed4728/checkpoint/train_status.json
+cat /local_nvme/ufo/runs/piplus_bfm_fb_8x4090_seed4728/checkpoint/distributed_sync.json</code></pre>
+      <table>
+        <thead><tr><th>现象</th><th>处理</th></tr></thead>
+        <tbody>
+          <tr><td>CUDA OOM</td><td>停止全部 rank；新建 work-dir；buffer 先降到 960000，再按需把 envs 降为 384/256</td></tr>
+          <tr><td>NCCL timeout / 某 rank 消失</td><td>检查 dmesg、GPU Xid、PCIe 拓扑和温度；确保 8 个进程一起退出后再重启</td></tr>
+          <tr><td>NaN / nonfinite</td><td>保留日志和 checkpoint，停止训练；检查最近 reward、动作幅度、接触力和数据 hash，不要直接续跑</td></tr>
+          <tr><td>磁盘快速增长</td><td>确认 rank buffer 数量为 8；扩大磁盘或降低 buffer；不要在写 checkpoint 时删除文件</td></tr>
+          <tr><td>GPU 利用率长期不均</td><td>定位最慢 rank、CPU 饱和、热降频和数据盘延迟；任一慢 rank 会拖住同步更新</td></tr>
+        </tbody>
+      </table>
+      <h3>6.2 断点恢复</h3>
+      <p>使用与原运行完全相同的 8 卡数量、GPU 可见顺序、机器人、数据、环境数和 buffer 参数，重新执行正式命令并指向同一个 <code>--work-dir</code>。程序会读取 <code>checkpoint/train_status.json</code>、模型和 <code>train_rank_0..7</code>。</p>
+      <pre><code>test -s "$RUN_DIR/checkpoint/train_status.json"
+for rank in 0 1 2 3 4 5 6 7; do
+  test -d "$RUN_DIR/checkpoint/buffers/train_rank_${rank}" || exit 1
+done
+
+# 然后原样重跑第 5.2 节命令。日志应出现 Loading the agent。
+</code></pre>
+      <div class="stop">分布式 checkpoint 不能自动更换 world size。缺任一 rank buffer、改成 1/4 卡或改变 rank 映射时，不应直接恢复；应新开实验或显式迁移 buffer。</div>
+    </section>
+
+    <section id="inference">
+      <h2>7. Checkpoint 与 tracking inference 验收</h2>
+      <h3>7.1 完整性</h3>
+      <pre><code>RUN_DIR=/local_nvme/ufo/runs/piplus_bfm_fb_8x4090_seed4728
+test -s "$RUN_DIR/config.json"
+test -s "$RUN_DIR/config.yaml"
+test -s "$RUN_DIR/checkpoint/model/model.safetensors"
+test -s "$RUN_DIR/checkpoint/train_status.json"
+cat "$RUN_DIR/checkpoint/train_status.json"</code></pre>
+      <h3>7.2 单卡无随机化跟踪</h3>
+      <pre><code>CUDA_VISIBLE_DEVICES=0 \
+PIPLUS_MOTION_DIR=/local_nvme/ufo/data/piplus \
+uv run python -m humanoidverse.tracking_inference \
+  --model-folder "$RUN_DIR" \
+  --robot-config configs/robots/piplus_bfm.yaml \
+  --data-manifest configs/data/piplus_lafan.yaml \
+  --dataset piplus_lafan \
+  --device cuda:0 \
+  --headless \
+  --disable-dr \
+  --disable-obs-noise \
+  --save-mp4 \
+  --motion-list 0</code></pre>
+      <p>确认输出视频不是空白，机器人姿态、左右关节和根朝向正确，无持续穿地或明显爆炸。量化验收还应记录 tracking 指标并和固定 seed 的前一 checkpoint 比较。</p>
+      <h3>7.3 实验归档</h3>
+      <pre><code>sha256sum \
+  configs/robots/piplus_bfm.yaml \
+  humanoidverse/data/robots/piplus/xml/piplus_bfm.xml \
+  "$PIPLUS_MOTION_DIR"/*.pkl \
+  &gt; "$RUN_DIR/artifact_sha256.txt"
+
+uv pip freeze &gt; "$RUN_DIR/pip_freeze.txt"
+nvidia-smi -q &gt; "$RUN_DIR/nvidia_smi_q.txt"</code></pre>
+    </section>
+
+    <section>
+      <h2>8. 最终门禁清单</h2>
+      <ol>
+        <li>强校验显示 23 actions、28 bodies、862 train clips、40 inference motions，hash 全通过。</li>
+        <li>单卡 smoke 无资产、MotionLib、观测、reward 或 NaN 错误。</li>
+        <li>八卡 smoke 产生 optimizer step、同步报告和 8 个 replay shards。</li>
+        <li>正式训练 8 卡显存有余量、利用率接近、温度和功耗稳定。</li>
+        <li>checkpoint 能用同一 world size 自动恢复，并能生成 PiPlus tracking 视频。</li>
+        <li>运行命令、seed、依赖、资产和数据 SHA-256 已归档。</li>
+      </ol>
+    </section>
+  </main>
+  <footer><div class="inner">PiPlus BFM-Zero 单机 8× RTX 4090 训练手册。参数以 UFO 当前分布式语义为准：步数为全局值，环境数与 replay buffer 为每 rank 值。</div></footer>
+</body>
+</html>

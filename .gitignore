@@ -1,0 +1,30 @@
+# Python/runtime artifacts
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Local experiment outputs
+_wandb/
+wandb/
+_smoke_runs/
+runs/
+cache/
+checkpoint/
+tea_debug.log
+*.log
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+.codegraph
+.omo/
+# Generated inference media
+model/
+
+# Downloaded public motion data
+humanoidverse/data/lafan_29dof_10s-clipped.pkl
+humanoidverse/data/lafan_29dof.pkl

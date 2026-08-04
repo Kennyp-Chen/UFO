@@ -1,0 +1,2 @@
+cd /data/hejunfu/bfm
+./monitor_cmds --search-root /data/hejunfu/runs

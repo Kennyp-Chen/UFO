@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage:
+#   ./monitor_kick_cmds --search-root /data/hejunfu/runs
+#   ./monitor_kick_cmds /data/hejunfu/runs/tech_kick_stage2_piplus_h0w_8gpu_20260804
+#   ./monitor_kick_cmds --search-root /data/hejunfu/runs --once
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$PROJECT_DIR"
+export PATH="$HOME/.local/bin:$PATH"
+
+monitor_python="${MONITOR_PYTHON:-}"
+if [[ -z "$monitor_python" ]]; then
+  for candidate in \
+    "$PROJECT_DIR/.venv/bin/python" \
+    "$HOME/conda-envs/bfm/bin/python"; do
+    if [[ -x "$candidate" ]] && "$candidate" -c 'import rich' >/dev/null 2>&1; then
+      monitor_python="$candidate"
+      break
+    fi
+  done
+fi
+
+if [[ -n "$monitor_python" ]]; then
+  exec "$monitor_python" -m humanoidverse.tech_kick_monitor "$@"
+elif command -v uv >/dev/null 2>&1; then
+  exec uv run --no-sync python -m humanoidverse.tech_kick_monitor "$@"
+else
+  exec python -m humanoidverse.tech_kick_monitor "$@"
+fi

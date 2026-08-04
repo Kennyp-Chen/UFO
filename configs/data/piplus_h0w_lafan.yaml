@@ -1,0 +1,19 @@
+robot_config: configs/robots/piplus_h0w.yaml
+
+metadata:
+  description: PiPlus S-12L8A0G2H0W LaFAN expert motions used by piplus_soccer.
+  source_root: /home/cato/Documents/HT_MotionData/lafan/PiPlus_S_12L8A0G2H0W_lafan_dataset_20260714
+  train_sha256: bff373734db2682173aa6ed48a7dabbae4b0f314087ebdf6e9bb2c923001fbf5
+  inference_sha256: 4575bf2ed7063a698e958afa4d36bbb4ab0a6f9ab4d3a73b5099178ae355a1ee
+  expected_joint_count: 22
+  expected_body_count: 27
+  expected_fps: 30
+
+datasets:
+  - name: piplus_h0w_lafan
+    format: ufo_pkl
+    train_path: ${oc.env:PIPLUS_H0W_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/PiPlus_S_12L8A0G2H0W_lafan_dataset_20260714}/piplus_h0w_lafan_10s-clipped.pkl
+    inference_path: ${oc.env:PIPLUS_H0W_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/PiPlus_S_12L8A0G2H0W_lafan_dataset_20260714}/piplus_h0w_lafan.pkl
+    train_sha256: bff373734db2682173aa6ed48a7dabbae4b0f314087ebdf6e9bb2c923001fbf5
+    inference_sha256: 4575bf2ed7063a698e958afa4d36bbb4ab0a6f9ab4d3a73b5099178ae355a1ee
+    weight: 1.0

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Usage:
+#   ./eval_cmds                         Sync the latest checkpoint and evaluate motion 0.
+#   SYNC_CHECKPOINT=0 ./eval_cmds       Reuse the current local checkpoint.
+#   MOTION_LIST="0 3 8" ./eval_cmds     Evaluate several motion IDs.
+#   ./eval_cmds --max-steps 300         Forward extra arguments to tracking_inference.
+#
+# Optional environment variables:
+#   MODEL_FOLDER       Local run directory used for checkpoint and inference outputs.
+#   PIPLUS_MOTION_DIR  Local directory containing piplus_lse_lafan.pkl.
+#   CUDA_VISIBLE_DEVICES  GPU exposed to inference; defaults to GPU 0.
+#   SYNC_CHECKPOINT    Set to 0 to skip pulling the remote checkpoint; defaults to 1.
+#   MOTION_LIST        Space-separated motion IDs; defaults to "0".
+#
+# Videos are saved under: $MODEL_FOLDER/tracking_inference/
+
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODEL_FOLDER="${MODEL_FOLDER:-$PROJECT_DIR/runs/remote_piplus_bfm_fb_6x4090_seed4728}"
+PIPLUS_MOTION_DIR="${PIPLUS_MOTION_DIR:-$PROJECT_DIR/cache/remote_piplus/data/piplus}"
+CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
+read -r -a motion_ids <<< "${MOTION_LIST:-0}"
+
+cd "$PROJECT_DIR"
+
+if [[ "${SYNC_CHECKPOINT:-1}" == "1" ]]; then
+  ./scripts/pull_remote_checkpoint.sh \
+    --local-run "$MODEL_FOLDER" \
+    --motion-dir "$PIPLUS_MOTION_DIR"
+fi
+
+export PIPLUS_MOTION_DIR CUDA_VISIBLE_DEVICES
+
+uv run --no-sync python -m humanoidverse.tracking_inference \
+  --model-folder "$MODEL_FOLDER" \
+  --robot-config configs/robots/piplus_bfm.yaml \
+  --data-manifest configs/data/piplus_lafan.yaml \
+  --dataset piplus_lafan \
+  --device cuda:0 \
+  --headless \
+  --disable-dr \
+  --disable-obs-noise \
+  --save-mp4 \
+  --export-onnx false \
+  --motion-list "${motion_ids[@]}" \
+  "$@"

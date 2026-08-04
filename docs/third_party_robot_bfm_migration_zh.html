@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>UFO 第三方机器人 BFM 训练迁移准备</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #172126;
+      --muted: #52616a;
+      --line: #cbd5d8;
+      --paper: #ffffff;
+      --band: #eef3f2;
+      --accent: #006b5f;
+      --accent-soft: #dff3ee;
+      --warn: #8a4b08;
+      --warn-soft: #fff3d6;
+      --danger: #9f2d2d;
+      --danger-soft: #fde8e7;
+      --code: #102023;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Noto Sans CJK SC", "Microsoft YaHei", system-ui, sans-serif;
+      font-size: 16px;
+      line-height: 1.72;
+      letter-spacing: 0;
+    }
+    header {
+      padding: 54px 24px 42px;
+      color: #f8fffd;
+      background: #153b3a;
+      border-bottom: 6px solid #efb13d;
+    }
+    header .inner, main, footer .inner { width: min(1080px, calc(100% - 40px)); margin: 0 auto; }
+    h1 { margin: 0 0 12px; font-size: clamp(30px, 4vw, 48px); line-height: 1.2; }
+    header p { max-width: 850px; margin: 0; color: #d8ebe7; font-size: 18px; }
+    nav { position: sticky; top: 0; z-index: 2; overflow-x: auto; background: #fff; border-bottom: 1px solid var(--line); }
+    nav .inner { display: flex; gap: 22px; width: min(1080px, calc(100% - 40px)); margin: 0 auto; padding: 12px 0; white-space: nowrap; }
+    nav a { color: var(--accent); font-weight: 700; text-decoration: none; }
+    main { padding: 34px 0 64px; }
+    section { padding: 26px 0; border-bottom: 1px solid var(--line); }
+    h2 { margin: 0 0 14px; color: #123f3b; font-size: 27px; }
+    h3 { margin: 24px 0 8px; font-size: 20px; }
+    p, ul, ol { margin-top: 8px; margin-bottom: 14px; }
+    li + li { margin-top: 6px; }
+    code { padding: 2px 5px; color: #064e48; background: #e9f2f0; border-radius: 3px; font-family: ui-monospace, monospace; }
+    pre { overflow-x: auto; margin: 14px 0; padding: 16px; color: #ecf8f5; background: var(--code); border-left: 4px solid #4fc3ad; border-radius: 4px; line-height: 1.55; }
+    pre code { padding: 0; color: inherit; background: transparent; }
+    table { width: 100%; margin: 16px 0; border-collapse: collapse; }
+    th, td { padding: 11px 12px; text-align: left; vertical-align: top; border: 1px solid var(--line); }
+    th { color: #143b38; background: var(--band); }
+    .note, .warn, .stop { margin: 16px 0; padding: 14px 16px; border-left: 5px solid var(--accent); background: var(--accent-soft); }
+    .warn { border-color: var(--warn); background: var(--warn-soft); }
+    .stop { border-color: var(--danger); background: var(--danger-soft); }
+    .gate { font-weight: 800; color: var(--accent); }
+    footer { padding: 28px 0; color: var(--muted); background: var(--band); }
+    @media (max-width: 700px) {
+      header { padding-top: 36px; }
+      table { display: block; overflow-x: auto; }
+      h1 { font-size: 30px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="inner">
+      <h1>第三方机器人迁移到 UFO 进行 BFM 训练</h1>
+      <p>准备清单、接口契约、数据门禁和分阶段验收。本文面向已经拥有机器人描述文件与专家轨迹、需要接入 UFO 的工程人员。</p>
+    </div>
+  </header>
+  <nav aria-label="文档目录">
+    <div class="inner">
+      <a href="#scope">目标边界</a>
+      <a href="#assets">机器人资产</a>
+      <a href="#motion">专家轨迹</a>
+      <a href="#config">配置契约</a>
+      <a href="#hardware">运行环境</a>
+      <a href="#gates">验收门禁</a>
+    </div>
+  </nav>
+  <main>
+    <section id="scope">
+      <h2>1. 先确定迁移边界</h2>
+      <p>UFO 的第三方机器人入口由三部分组成：一份可由 MuJoCo/MJLab 加载的 MJCF、一份机器人 YAML，以及已经 retarget 到该机器人关节空间的专家轨迹。算法仍使用 UFO 的 FB 或 TeCH；迁移工作的重点是保证物理模型、策略动作和轨迹 DOF 三者完全对齐。</p>
+      <div class="stop"><strong>不在迁移范围内：</strong>UFO 不负责把人体动作或其他机器人动作自动 retarget 到目标机器人；G1 checkpoint 也不能直接用于新机器人的继续训练或推理。</div>
+      <table>
+        <thead><tr><th>对象</th><th>唯一事实来源</th><th>必须一致的下游项</th></tr></thead>
+        <tbody>
+          <tr><td>动力学与拓扑</td><td>训练专用 MJCF</td><td>body、joint、qpos/qvel 地址、碰撞、惯量</td></tr>
+          <tr><td>策略动作布局</td><td>机器人 YAML 的 <code>control_joints</code></td><td>动作维度、默认姿态、PD、力矩/速度限制</td></tr>
+          <tr><td>专家动作布局</td><td>轨迹中的 <code>joint_names</code> 和 <code>dof</code></td><td>列数、列顺序、单位、采样率</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="assets">
+      <h2>2. 机器人描述文件准备</h2>
+      <h3>2.1 必需文件</h3>
+      <ul>
+        <li>MJCF/XML：训练与推理的物理模型，必须有浮动基座和每个可控单自由度关节。</li>
+        <li>mesh/texture：MJCF 引用的所有资源，路径在迁移后仍可解析；建议采用相对路径。</li>
+        <li>URDF（推荐）：用于核对 effort、velocity、damping、friction 和左右关节语义，但不取代 MJCF 的 qpos/qvel 布局。</li>
+        <li>资产版本记录：型号、发布日期或提交号，防止描述文件与轨迹来自不同硬件版本。</li>
+      </ul>
+      <h3>2.2 MJLab 兼容要求</h3>
+      <ul>
+        <li>根 body 应使用 <code>&lt;freejoint name="..."/&gt;</code>；避免写成 <code>&lt;joint type="free"&gt;</code>，后者会被当前 MotionLib 误计为一个 actuator body。四元数约定必须写入机器人 YAML。</li>
+        <li>每个控制关节应为 hinge/slide 单自由度关节，名称全局唯一。</li>
+        <li>UFO 当前 MJLab 构建器会在 Python 侧创建 DC motor。训练 MJCF 不应在 joint 上保留 <code>actuatorfrcrange</code>，已有 XML actuator 会在建模时被替换。</li>
+        <li>MotionLib 仍需要 MJCF 中存在显式 <code>&lt;actuator&gt;</code>，建议为每个策略关节添加同名 motor；这同时让导入检查能够确定动作顺序。</li>
+        <li>碰撞几何必须覆盖双脚，并避免仅有 visual mesh 而无有效 collision geom。</li>
+      </ul>
+      <div class="note">保留供应商原始 XML，另生成训练专用 XML。不要在无法追溯的情况下直接覆盖原始模型。</div>
+      <h3>2.3 初步检查</h3>
+      <pre><code>uv run python -m humanoidverse.tools.robot_inspect \
+  --xml /path/to/robot_training.xml \
+  --urdf /path/to/robot.urdf \
+  --name my_robot \
+  --out /tmp/my_robot_draft.yaml \
+  --hydra-out humanoidverse/config/robot/my_robot/my_robot_auto.yaml</code></pre>
+      <p>生成结果只是草稿。工具能推断结构，却无法可靠决定足端、手端、躯干、接触惩罚、默认站姿和控制器参数。</p>
+    </section>
+
+    <section id="motion">
+      <h2>3. 专家轨迹准备</h2>
+      <p>训练推荐使用接近 10 秒的 clip，推理与跟踪评估保留完整序列。大数据不应提交到 Git，可由 manifest 读取共享磁盘路径或环境变量展开后的路径。</p>
+      <table>
+        <thead><tr><th>字段</th><th>要求</th><th>常见错误</th></tr></thead>
+        <tbody>
+          <tr><td><code>root_trans_offset</code></td><td><code>[T, 3]</code>，米，z-up</td><td>毫米未换算、根高度重复叠加</td></tr>
+          <tr><td><code>root_rot</code></td><td><code>[T, 4]</code>，确认 xyzw/wxyz</td><td>顺序错误导致模型侧躺</td></tr>
+          <tr><td><code>dof</code> / <code>dof_pos</code></td><td><code>[T, N]</code>，弧度，N 等于策略动作数</td><td>按字母排序而非控制顺序</td></tr>
+          <tr><td><code>pose_aa</code></td><td><code>[T, body_count, 3]</code></td><td>包含 world body 或缺少固定 body</td></tr>
+          <tr><td><code>fps</code></td><td>正数且与真实采样率一致</td><td>重采样后仍保留旧 fps</td></tr>
+          <tr><td><code>joint_names</code></td><td>与 <code>control_joints</code>逐项相同</td><td>左右腿或头/手顺序不同</td></tr>
+        </tbody>
+      </table>
+      <h3>3.1 推荐的数据组织</h3>
+      <pre><code>/shared/ufo-data/my_robot/
+├── my_robot_full.pkl
+├── my_robot_10s-clipped.pkl
+└── SHA256SUMS</code></pre>
+      <p>训练与推理分开引用，避免用裁剪数据做长序列评估。迁移前记录 motion 数量、总帧数、fps 分布、关键 tensor shape 和 SHA-256。</p>
+    </section>
+
+    <section id="config">
+      <h2>4. UFO 配置契约</h2>
+      <h3>4.1 机器人 YAML</h3>
+      <p><code>configs/robots/&lt;robot&gt;.yaml</code> 至少需要：</p>
+      <ul>
+        <li><code>xml_path</code>、<code>base_body</code>、四元数和坐标系约定；</li>
+        <li>显式或 actuator 推导的 <code>control_joints</code>；</li>
+        <li><code>feet</code>、<code>hands</code>、<code>key_bodies</code>；</li>
+        <li><code>training.hydra_robot</code> 和语义 body/ankle 配置；</li>
+        <li>完整默认姿态、PD gains、action scale；</li>
+        <li>与关节顺序等长的 effort/velocity limits；</li>
+        <li>每关节 actuator 的 effort、velocity、armature、friction。</li>
+      </ul>
+      <h3>4.2 Hydra 机器人配置</h3>
+      <p><code>humanoidverse/config/robot/&lt;robot&gt;/&lt;variant&gt;.yaml</code> 提供算法环境仍需的机器人分组、左右对称信息、随机化 body 集合及 motion 语义。运行时会由 robot training spec 覆盖动作维度、body 列表、限位和控制参数。</p>
+      <h3>4.3 数据 manifest</h3>
+      <pre><code>robot_config: configs/robots/my_robot.yaml
+datasets:
+  - name: my_robot_expert
+    format: ufo_pkl
+    train_path: ${oc.env:MY_ROBOT_MOTION_DIR}/my_robot_10s-clipped.pkl
+    inference_path: ${oc.env:MY_ROBOT_MOTION_DIR}/my_robot_full.pkl
+    weight: 1.0</code></pre>
+      <div class="warn"><strong>可移植性要求：</strong>服务器上只需重新设置数据根目录，不应修改并提交 manifest 中的机器私有绝对路径。</div>
+    </section>
+
+    <section id="hardware">
+      <h2>5. 软件与硬件准备</h2>
+      <ul>
+        <li>Linux、Python 3.10、支持项目锁定依赖的 <code>uv</code>。</li>
+        <li>NVIDIA 驱动与项目 PyTorch/CUDA 组合兼容；多卡节点可正常执行 NCCL all-reduce。</li>
+        <li>每张 GPU 有独立仿真环境和 replay buffer；<code>--num-envs</code> 与 <code>--buffer-size</code> 均是每 rank 数值。</li>
+        <li>共享存储应能承受 8 个进程并发读专家轨迹；必要时训练前复制到节点本地 NVMe。</li>
+        <li>运行目录、缓存目录和 W&amp;B 目录预留足够空间，并与源码目录分开。</li>
+      </ul>
+      <pre><code>uv sync
+uv run python -c "import torch, mujoco; print(torch.__version__, torch.cuda.device_count(), mujoco.__version__)"
+nvidia-smi
+nvidia-smi topo -m</code></pre>
+    </section>
+
+    <section id="gates">
+      <h2>6. 分阶段验收门禁</h2>
+      <ol>
+        <li><span class="gate">资产门禁：</span>MuJoCo 可加载 MJCF；mesh 无缺失；nq/nv/body/joint 数符合预期。</li>
+        <li><span class="gate">布局门禁：</span>控制关节、MJCF actuator、轨迹 <code>joint_names</code> 三者逐项一致。</li>
+        <li><span class="gate">轨迹门禁：</span>所有 motion shape、fps、有限值、四元数范数与关节限位检查通过。</li>
+        <li><span class="gate">配置门禁：</span><code>load_robot_training_spec</code> 成功，默认姿态完整，所有语义名称存在。</li>
+        <li><span class="gate">单环境门禁：</span>构建环境后静止若干步，无 NaN、爆炸力矩或穿地。</li>
+        <li><span class="gate">单卡 smoke：</span>16 个环境、2048 global steps，能够采样、更新并写 checkpoint。</li>
+        <li><span class="gate">单卡短训：</span>观察 reward、episode length、buffer 和显存曲线，排除系统性异常。</li>
+        <li><span class="gate">多卡 smoke：</span>8 rank 初始化、step 同步、checkpoint 和退出均正常。</li>
+        <li><span class="gate">正式训练：</span>固定资产/数据 hash、配置、seed、依赖锁和启动命令。</li>
+      </ol>
+      <p>完成机器人 YAML 和数据 manifest 后，用强校验工具一次执行资产、布局、shape、有限值、四元数和数据哈希门禁：</p>
+      <pre><code>uv run python -m humanoidverse.tools.validate_bfm_setup \
+  --robot-config configs/robots/my_robot.yaml \
+  --data-manifest configs/data/my_robot_motion.yaml</code></pre>
+      <div class="stop"><strong>停止条件：</strong>出现 NaN、关节顺序不一致、根姿态明显错误、持续触地穿透、显存持续增长、不同 rank step 分叉时，不应直接扩大环境数继续训练。</div>
+    </section>
+
+    <section>
+      <h2>7. 迁移交付物清单</h2>
+      <table>
+        <thead><tr><th>交付物</th><th>建议位置</th><th>是否提交 Git</th></tr></thead>
+        <tbody>
+          <tr><td>训练 MJCF 与必要 mesh</td><td><code>humanoidverse/data/robots/&lt;robot&gt;/</code></td><td>按资产许可证与仓库策略</td></tr>
+          <tr><td>机器人训练 YAML</td><td><code>configs/robots/</code></td><td>是</td></tr>
+          <tr><td>Hydra 机器人 YAML</td><td><code>humanoidverse/config/robot/</code></td><td>是</td></tr>
+          <tr><td>数据 manifest</td><td><code>configs/data/</code></td><td>是</td></tr>
+          <tr><td>大体积专家轨迹</td><td>共享盘或对象存储</td><td>否</td></tr>
+          <tr><td>验证测试与运行手册</td><td><code>tests/</code>、<code>docs/</code></td><td>是</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+  <footer><div class="inner">UFO 第三方机器人 BFM 迁移准备文档。配置示例中的名称与路径需替换为目标机器人实际值。</div></footer>
+</body>
+</html>

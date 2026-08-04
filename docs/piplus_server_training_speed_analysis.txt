@@ -1,0 +1,46 @@
+PiPlus 新旧服务器训练速度差异分析
+====================================
+
+结论
+----
+8 张 RTX 5090 变慢的主要原因不是单卡算力，而是多卡通信条件更差。
+旧 6×4090 服务器的 FB 训练稳定约 900-922 FPS；新 8×5090 服务器实际约 421 FPS，
+因此新服务器完成同样的 192M 全局环境步大约需要 5 天，旧服务器约 2.4-2.6 天。
+
+训练配置对比
+------------
+- 两次都是 FB agent。
+- 两次每卡都是 512 个环境，FB 每次触发 16 次 optimizer update。
+- 两次日志都显示 distributed/compile=0，因此 torch.compile 不是新旧差异的主因。
+- 新服务器 replay buffer 为每卡 1M，旧服务器为每卡 1.28M；新配置理论上不应因此变慢。
+- 新服务器使用 545 条筛选 motion，旧服务器使用 862 条 motion；新数据量更小，也不是变慢原因。
+
+硬件与通信差异
+--------------
+1. 新服务器 8 张 5090 的 nvidia-smi topo -p2p r 全部为 CNS，GPU 间没有可用 P2P。
+2. 旧服务器的 GPU P2P 也不支持，但有两张 Mellanox mlx5 网卡和 /dev/infiniband/uverbs*，
+   可以使用高速 RDMA/InfiniBand 通信路径。
+3. 新服务器只有 1GbE eno1，且 0-3 号 GPU 和 4-7 号 GPU 分属两个 NUMA 节点，
+   8 卡同步需要频繁经过 CPU/PCIe/NUMA 路径。
+4. 新服务器为避免 NCCL SHM 触发 CUDA illegal memory access，使用了：
+   NCCL_P2P_DISABLE=1
+   NCCL_SHM_DISABLE=1
+   NCCL_IB_DISABLE=1
+   这会迫使 NCCL 通过本机 socket/loopback 做 all-reduce。
+
+实测证据
+--------
+- 新服务器当前 NCCL socket all-reduce：约 1.63 GiB/s。
+- 设置 NCCL_SOCKET_NTHREADS=4 和 NCCL_NSOCKS_PERTHREAD=4 后：约 3.44 GiB/s。
+- 开启 NCCL SHM、Tree 或 LL128 会稳定触发 CUDA illegal memory access，不能直接用于正式训练。
+- 新服务器训练期间 GPU 利用率很高，但功耗只有约 130-160W，说明主要在等待通信，
+  并非计算核心满负荷运行。
+
+建议
+----
+优先级从高到低：
+1. 为 5090 服务器配置可用的高速 RDMA/InfiniBand 或其他 GPU 高速互联。
+2. 在硬件不能改变时，使用同一 NUMA 节点的 4 张卡做训练，测试通信缩放效果。
+3. 保留 NCCL_SOCKET_NTHREADS=4 和 NCCL_NSOCKS_PERTHREAD=4。
+4. 可用 --enable-compile 做软件优化，但它只能减少网络计算开销，不能解决通信瓶颈。
+5. 不建议通过减少 num-agent-updates 伪造提速，因为这会改变 FB 的训练更新密度和结果可比性。

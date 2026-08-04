@@ -1,0 +1,251 @@
+name: piplus_bfm
+xml_path: humanoidverse/data/robots/piplus/xml/piplus_bfm.xml
+
+base_body: base_link
+root_joint: floating_base_joint
+root_quat_order: xyzw
+coordinate_system: z_up
+dof_unit: rad
+
+# Keep this order identical to the source expert data joint_names field.
+control_joints:
+  mode: all_actuated
+
+feet:
+  - l_ankle_roll_link
+  - r_ankle_roll_link
+
+hands:
+  - l_wrist_link
+  - r_wrist_link
+
+# The original PiPlus BFM preset tracks the two ankle bodies as key bodies.
+key_bodies:
+  - l_ankle_roll_link
+  - r_ankle_roll_link
+
+default_dof_pos:
+  r_hip_pitch_joint: -0.25
+  r_hip_roll_joint: 0.0
+  r_thigh_joint: 0.0
+  r_calf_joint: 0.65
+  r_ankle_pitch_joint: -0.4
+  r_ankle_roll_joint: 0.0
+  l_hip_pitch_joint: -0.25
+  l_hip_roll_joint: 0.0
+  l_thigh_joint: 0.0
+  l_calf_joint: 0.65
+  l_ankle_pitch_joint: -0.4
+  l_ankle_roll_joint: 0.0
+  waist_yaw_joint: 0.0
+  r_shoulder_pitch_joint: 0.18
+  r_shoulder_roll_joint: -0.15
+  r_upper_arm_joint: 0.0
+  r_elbow_joint: -0.5
+  l_shoulder_pitch_joint: 0.18
+  l_shoulder_roll_joint: 0.15
+  l_upper_arm_joint: 0.0
+  l_elbow_joint: -0.5
+  head_yaw_joint: 0.0
+  head_pitch_joint: 0.0
+
+training:
+  hydra_robot: piplus/piplus_bfm
+  # Preserve the PiPlus-specific BFM-Zero reset distribution from the source
+  # experiment while continuing to use UFO's shared BFM-Zero experiment.
+  hydra_overrides:
+    - env.config.lie_down_init=true
+    - env.config.lie_down_init_prob=0.3
+  semantics:
+    contact_bodies:
+      - l_ankle_roll_link
+      - r_ankle_roll_link
+    undesired_contact_bodies:
+      - base_link
+      - waist_yaw_link
+      - torso_link
+      - head
+      - shoulder
+      - hip
+    torso_name: waist_yaw_link
+    left_ankle_dof_names:
+      - l_ankle_pitch_joint
+      - l_ankle_roll_joint
+    right_ankle_dof_names:
+      - r_ankle_pitch_joint
+      - r_ankle_roll_joint
+  init_state:
+    pos: [0.0, 0.0, 0.38]
+    rot: [0.0, 0.0, 0.0, 1.0]
+    lin_vel: [0.0, 0.0, 0.0]
+    ang_vel: [0.0, 0.0, 0.0]
+    default_joint_angles:
+      r_hip_pitch_joint: -0.25
+      r_hip_roll_joint: 0.0
+      r_thigh_joint: 0.0
+      r_calf_joint: 0.65
+      r_ankle_pitch_joint: -0.4
+      r_ankle_roll_joint: 0.0
+      l_hip_pitch_joint: -0.25
+      l_hip_roll_joint: 0.0
+      l_thigh_joint: 0.0
+      l_calf_joint: 0.65
+      l_ankle_pitch_joint: -0.4
+      l_ankle_roll_joint: 0.0
+      waist_yaw_joint: 0.0
+      r_shoulder_pitch_joint: 0.18
+      r_shoulder_roll_joint: -0.15
+      r_upper_arm_joint: 0.0
+      r_elbow_joint: -0.5
+      l_shoulder_pitch_joint: 0.18
+      l_shoulder_roll_joint: 0.15
+      l_upper_arm_joint: 0.0
+      l_elbow_joint: -0.5
+      head_yaw_joint: 0.0
+      head_pitch_joint: 0.0
+  control:
+    action_scale: 0.25
+    action_clip_value: 5.0
+    normalize_action_to: 5.0
+    effort_limit_scale: 0.8
+    effort_limit:
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 20.0
+      - 3.0
+      - 3.0
+    velocity_limit:
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 7.12
+      - 10.47
+      - 15.91
+      - 15.91
+      - 15.91
+      - 15.91
+      - 15.91
+      - 15.91
+      - 15.91
+      - 15.91
+      - 30.37
+      - 30.37
+    stiffness:
+      hip_pitch: 52.15889
+      hip_roll: 52.15889
+      thigh: 52.15889
+      calf: 52.15889
+      ankle_pitch: 52.15889
+      ankle_roll: 52.15889
+      waist_yaw: 35.09631
+      shoulder_pitch: 32.50653
+      shoulder_roll: 32.50653
+      upper_arm: 32.50653
+      elbow: 32.50653
+      head_yaw: 7.80094
+      head_pitch: 7.80094
+    damping:
+      hip_pitch: 3.32054
+      hip_roll: 3.32054
+      thigh: 3.32054
+      calf: 3.32054
+      ankle_pitch: 3.32054
+      ankle_roll: 3.32054
+      waist_yaw: 2.23430
+      shoulder_pitch: 2.06943
+      shoulder_roll: 2.06943
+      upper_arm: 2.06943
+      elbow: 2.06943
+      head_yaw: 0.49662
+      head_pitch: 0.49662
+  actuator:
+    source: yaml
+    profiles:
+      '5047':
+        model: ht_motor
+        source_file: HT_lab/actuators/HT_motor.py::HTMotorCfg_5047
+        curve_param_a: -0.0141
+        curve_param_b: -0.0709
+        curve_param_c: 6.2756
+        max_torque: 20.0
+        max_velocity: 6.0
+        saturation_effort: 20.0
+        motor_velocity_limit: 6.0
+      '4438':
+        model: ht_motor
+        source_file: HT_lab/actuators/HT_motor.py::HTMotorCfg_4438
+        curve_param_a: -0.128416
+        curve_param_b: -0.699618
+        curve_param_c: 19.833274
+        max_torque: 10.0
+        max_velocity: 20.0
+        saturation_effort: 10.0
+        motor_velocity_limit: 20.0
+      '3536':
+        model: implicit
+        source_file: HT_lab/actuators/HT_motor_cfg.py::3536
+        max_torque: 3.0
+        max_velocity: 60.0
+        saturation_effort: 3.0
+        motor_velocity_limit: 60.0
+    joints:
+      r_hip_pitch_joint: &leg_actuator {effort_limit: 20.0, velocity_limit: 7.12, armature: 0.013212, friction: 0.02, profile: '5047'}
+      r_hip_roll_joint: *leg_actuator
+      r_thigh_joint: *leg_actuator
+      r_calf_joint: *leg_actuator
+      r_ankle_pitch_joint: *leg_actuator
+      r_ankle_roll_joint: *leg_actuator
+      l_hip_pitch_joint: *leg_actuator
+      l_hip_roll_joint: *leg_actuator
+      l_thigh_joint: *leg_actuator
+      l_calf_joint: *leg_actuator
+      l_ankle_pitch_joint: *leg_actuator
+      l_ankle_roll_joint: *leg_actuator
+      waist_yaw_joint: {effort_limit: 20.0, velocity_limit: 10.47, armature: 0.008890, friction: 0.02, profile: '5047'}
+      r_shoulder_pitch_joint: &arm_actuator {effort_limit: 20.0, velocity_limit: 15.91, armature: 0.008234, friction: 0.02, profile: '4438'}
+      r_shoulder_roll_joint: *arm_actuator
+      r_upper_arm_joint: *arm_actuator
+      r_elbow_joint: *arm_actuator
+      l_shoulder_pitch_joint: *arm_actuator
+      l_shoulder_roll_joint: *arm_actuator
+      l_upper_arm_joint: *arm_actuator
+      l_elbow_joint: *arm_actuator
+      head_yaw_joint: &head_actuator {effort_limit: 3.0, velocity_limit: 30.37, armature: 0.001976, friction: 0.02, profile: '3536'}
+      head_pitch_joint: *head_actuator
+
+metadata:
+  review_status: curated
+  source_robot_config: /localhdd/Projects/HT_BFM-piplus_5090conda/humanoidverse/config/robot/piplus/PiPlus_S_12L8A0G2H1W_LSE.yaml
+  source_asset_version: PiPlus_S_12L8A0G2H1W_LSE_260424
+  source_mjcf_sha256: 4e8e40d67014ba9f0ba95914345c29673cfa63eceb6c2685a597fff368b49072
+  source_urdf_sha256: fe93a45d79520a9a7dadaf0ab3c145f7e613362e5272a98e5671a2defadaa0e5
+  notes:
+    - The training MJCF removes actuatorfrcrange, uses a freejoint root, and adds 23 same-name motors for MJLab and MotionLib compatibility.
+    - Control, actuator, default-pose, and semantic values are migrated from the source PiPlus BFM preset.
+    - The source PiPlus experiment's 30 percent lie-down initialization is retained through Hydra overrides.

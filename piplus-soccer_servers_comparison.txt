@@ -1,0 +1,120 @@
+PiPlus 8卡服务器完整对比
+========================
+
+检查时间：2026-07-28
+服务器：piplus-soccer-5090（8x RTX 5090）与 piplus-soccer（8x RTX 4090）
+
+
+一、结论
+--------
+
+- 两台服务器都能运行当前 UFO 单机8卡训练，但都没有 GPU P2P/NVLink。
+- 5090服务器单卡算力、显存和CPU更强；适合显存敏感、计算密集、通信较少的任务。
+- 4090服务器的 SHM 通信稳定且明显更快，已完成真实8卡 optimizer 同步；
+  对当前这类通信占比较高的8卡 DDP/UFO 训练，优先选择4090服务器。
+- 5090服务器的 SHM 会触发 CUDA illegal memory access，只能使用较慢的 Socket；
+  因此虽然单卡更快，八卡扩展效率反而受限。
+- 两台机器的 RoCE 均无 GPUDirect RDMA，单机训练都不应强制走 RoCE。
+
+
+二、硬件对比
+------------
+
+项目                 8x RTX 5090                         8x RTX 4090
+GPU显存              31.4 GiB/卡                         24.6 GiB/卡
+GPU功耗上限          575 W/卡                            450 W/卡
+GPU总线              PCIe 5.0 x16                       PCIe 4.0 x16
+CPU                  2x Xeon Platinum 8470N             2x Xeon Gold 6530
+CPU规模              104核/208线程                      64核/64线程
+系统内存             377 GiB                            503 GiB
+NUMA/GPU分布         2个NUMA，每组4张GPU                4个NUMA，每组2张GPU
+GPU高速互联          无，所有GPU对均为P2P CNS           无，所有GPU对均为P2P CNS
+RDMA网卡             ConnectX-3，单口10GbE RoCE         2x ConnectX-4 Lx，25GbE RoCE
+当前有效RDMA口       mlx4_0 / ens49                     mlx5_1 / ens11f1np1
+网卡状态             1口在线                            1口在线，另1口未接链路
+数据盘               3.5 TiB NVMe                       3.5 TiB NVMe
+Linux内核            6.8.0-88-generic                   5.15.0-43-generic
+NVIDIA驱动           580.173.02                         580.105.08
+PyTorch/CUDA         2.7.1 / CUDA 12.8                  2.7.1 / CUDA 12.6
+NCCL                 2.26.2                             2.26.2
+
+4090服务器内存多约33%；5090服务器CPU核心多约63%，线程数为3.25倍。
+5090八卡仅GPU功耗上限合计约4.6 kW，4090约3.6 kW，5090散热和供电压力更高。
+
+
+三、相同口径GPU微基准
+--------------------
+
+单卡8192x8192矩阵乘及512 MiB显存拷贝：
+
+项目                 RTX 5090           RTX 4090          5090优势
+FP16 matmul           232.13 TFLOPS      161.60 TFLOPS     +44%
+BF16 matmul           235.03 TFLOPS      165.54 TFLOPS     +42%
+FP32-high matmul      115.35 TFLOPS       87.99 TFLOPS     +31%
+显存拷贝              1523.24 GB/s        918.50 GB/s      +66%
+
+结论：单卡计算和显存带宽由5090明显领先，同时每卡多约6.8 GiB显存。
+
+
+四、8卡NCCL实测
+---------------
+
+测试环境均为 PyTorch 2.7.1、NCCL 2.26.2；指标为每个rank的tensor payload/耗时，
+不是NCCL bus bandwidth。
+
+路径/负载                         8x RTX 5090        8x RTX 4090
+Socket，单个256 MiB all-reduce    2.819 GiB/s        1.505-1.897 GiB/s
+Socket，64个1 MiB collective      0.450 GiB/s        0.717-0.822 GiB/s
+SHM，单个256 MiB all-reduce       失败                8.476 GiB/s
+SHM，64个1 MiB collective         失败                5.529 GiB/s
+RoCE，单个256 MiB all-reduce      0.180 GiB/s        0.480 GiB/s
+
+关键证据：
+
+- 4090默认NCCL自动使用 `SHM/direct/direct`，256 MiB复测为8.127 GiB/s；稳定通过。
+- 5090的SHM在首个64 MiB collective触发 CUDA illegal memory access。
+- 4090 RoCE日志确认 `Using network IB`、`mlx5_1:1/RoCE`、GID 3；
+  5090日志确认 `mlx4_0:1/RoCE`。两者均显示 GPU Direct RDMA Disabled。
+- 4090 RoCE虽比5090快约2.7倍，但仍远慢于本机SHM；RoCE不应作为单机8卡默认路径。
+- 5090同NUMA四卡Socket为3.606/3.945 GiB/s；4090四卡分组Socket为
+  3.814/3.483 GiB/s。扩展到八卡后，两台机器都受到跨NUMA影响。
+
+
+五、框架级验收
+--------------
+
+8x RTX 5090：
+
+- 当前 UFO 8 worker smoke 正常结束，world_size=8，返回码0。
+- 稳定配置必须禁用 P2P、SHM、IB，使用 ens49 Socket。
+
+8x RTX 4090：
+
+- 当前 UFO 启动8个worker并完成131072个global steps。
+- 完成6次optimizer step，effective batch size=8192。
+- 8个rank均生成独立buffer，模型和optimizer checkpoint完整。
+- distributed_sync显示8个rank参数完全一致，max_abs_diff_from_rank0=0.0。
+- 全部worker正常退出，无NCCL timeout、NaN、CUDA错误或rank提前退出。
+
+历史正式训练记录：
+
+- 同类FB训练中，6x4090曾稳定约900-922 FPS，8x5090实际约421 FPS。
+- 两次每卡均为512个环境、每次触发16次optimizer update，均未启用compile。
+- 两次机器人和数据集并非完全相同（4090使用862条motion，5090使用545条），
+  因此该FPS不能作为严格的纯硬件基准，但能反映现有配置下的实际生产表现。
+- 本次NCCL结果与该记录方向一致：4090可使用高速SHM，5090被迫使用Socket。
+
+
+六、使用建议
+------------
+
+1. 当前UFO八卡DDP正式训练：优先4090服务器，保留SHM，禁用单机RoCE。
+2. 超过24 GiB显存或计算占比高、梯度同步较少：优先5090服务器。
+3. 5090正式训练继续使用已验收的Socket配置，不要开启SHM或RoCE。
+4. 4090单机建议使用：
+     NCCL_NVLS_ENABLE=0
+     NCCL_IB_DISABLE=1
+     NCCL_SOCKET_IFNAME=ens11f1np1
+   `NCCL_SHM_DISABLE`应保持未设置或为0；P2P不可用，NCCL会自动回退到SHM。
+5. 若计划多机训练，两台机器都需要更高速且支持GPUDirect RDMA的100Gb以上网络；
+   当前10/25Gb RoCE只能证明路径可用，不适合高效多机扩展。

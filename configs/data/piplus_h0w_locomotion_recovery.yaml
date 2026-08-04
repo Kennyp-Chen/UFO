@@ -1,0 +1,28 @@
+robot_config: configs/robots/piplus_h0w.yaml
+
+metadata:
+  description: H0W walk, run, sprint, and fall-and-get-up expert motions. Dance, fight, and jump motions are excluded.
+  source_root: ${oc.env:PIPLUS_H0W_FILTERED_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/lafan1_piplus_s_0W}
+  source_categories: [walk, run, sprint, fallAndGetUp]
+  excluded_categories: [dance, fight, fightAndSports, jumps]
+  expected_joint_count: 22
+  expected_fps: 30
+
+datasets:
+  - name: piplus_h0w_locomotion_recovery
+    format: robot_state_pkl
+    source_path:
+      - ${oc.env:PIPLUS_H0W_FILTERED_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/lafan1_piplus_s_0W}/fallAndGetUp*.pkl
+      - ${oc.env:PIPLUS_H0W_FILTERED_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/lafan1_piplus_s_0W}/run*.pkl
+      - ${oc.env:PIPLUS_H0W_FILTERED_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/lafan1_piplus_s_0W}/sprint*.pkl
+      - ${oc.env:PIPLUS_H0W_FILTERED_MOTION_DIR,/home/cato/Documents/HT_MotionData/lafan/lafan1_piplus_s_0W}/walk*.pkl
+    weight: 1.0
+    columns:
+      root_pos: base_pos_w
+      root_quat_order: wxyz
+      dof_pos: joint_pos
+    auto_build:
+      train_clip_seconds: 10.0
+      clip_stride_seconds: 10.0
+      keep_short: true
+      min_clip_seconds: 1.0
