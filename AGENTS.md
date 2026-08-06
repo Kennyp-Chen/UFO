@@ -129,6 +129,13 @@
 - robot-aware 训练：`docs/robot_config_training.md`。
 - PiPlus 多卡训练和专项操作以 `docs/` 中对应说明为准，不要从文件名推断参数。
 
+## 实验台账规则
+
+- [`docs/experiment_ledger.md`](docs/experiment_ledger.md) 是所有实验进度的唯一权威台账。所有新实验、续训、checkpoint 创建、checkpoint 恢复、命令或配置变化、进程启动/停止、指标里程碑、失败/中断、硬件分配以及 observation/architecture 决策，都必须追加记录。
+- 每条记录必须包含本地时间戳、状态、实验 ID、workdir、checkpoint lineage、完整命令或配置变化、硬件/GPU、验证结果和证据路径。历史记录只追加，不覆盖；更正必须以 dated amendment 追加。
+- 不得只把实验进度留在聊天、shell history、运行目录或其他专题文档中；checkpoint、日志和训练输出仍留在运行目录，不提交到 Git。
+- 修改运行中的 observation contract、decoder contract 或 critic architecture 前，必须先在台账记录 fresh-experiment 决策；不得让旧 checkpoint 静默跨合同恢复。
+
 ## 配置导航（自动整理）
 
 - 常规入口：`run_train.sh` -> `humanoidverse.train`；FB 是默认 agent，`tech` 是 TeCH，`tldr` 仅保留兼容 alias。

@@ -23,7 +23,19 @@ UFO_HT 中的实现位置：
 | PPO profile、`UNITREE_PPO_CONFIG` 和 `ppo_update` 扩展 | `humanoidverse/piplus_h0w_stage2.py` |
 | Profile C 注册与 metadata | `humanoidverse/amp_stage2_piplus_22dof.py` |
 
-## 2. 奖励对比
+## 2. Observation contract
+
+这里必须区分 Unitree 原始 actor/critic 观测和 H0W Stage2 的冻结合同。以下语义来自 pinned commit `1425b15f73bd4095f0df53709d7c389c3eb9e790`：
+
+- Unitree actor terms 包含 `base_ang_vel`、`projected_gravity`、command、phase、`joint_pos`、`joint_vel`、actions，以及 rough terrain 配置下的 `height_scan`。其中 `joint_pos` 通过 `mdp.joint_pos_rel`，`joint_vel` 通过 `mdp.joint_vel_rel`，都是相对项。
+- Unitree critic 包含 actor terms，并额外包含 `base_lin_vel`、clean `height_scan`、`foot_height`、`foot_air_time`、`foot_contact` 和 `foot_contact_forces`。这里不声明 Unitree 的精确 flattened dimension，除非针对同一配置直接核验。
+- Flat G1 配置移除 `height_scan` 和 terrain curriculum。不要把 rough terrain 的传感器项或 curriculum 自动带入 H0W。
+
+H0W 的当前 actor 和 decoder 合同保持不变：`humanoidverse/agents/envs/humanoidverse_mjlab.py:_raw_actor_obs/get_observation` 生成相对 `dof_pos`，`humanoidverse/piplus_h0w_stage2.py:flatten_encoder_observation/_encoder_input_scale/CommandEncoderPolicy` 消费 363 维编码器输入，`humanoidverse/piplus_h0w_onnx_decoder.py:build_actor_observation/project_z` 消费 616 维 decoder 输入并保持 latent projection norm 16。`privileged_state` 虽由环境暴露，但 standalone H0W Stage2 的 `CommandEncoderPolicy` 只有一个 trunk 和 value head，value 使用同一份 363 维 actor features，没有单独的 privileged critic 路径。因此当前 Profile C 不是 Unitree 式 asymmetric critic 实现。
+
+不要把 H0W 的相对关节位置改成绝对关节位置。H0W 的相对值是 `dof_pos - (default_dof_pos + default_dof_pos_offset)`，与 H0W default pose、`[-0.02, 0.02]` 的 default offset randomization、action/decoder contract 以及 reset/history 语义一致；而 pinned Unitree source 本身也使用 `mdp.joint_pos_rel`。绝对 joint position 作为额外的 critic-only feature 可以作为未来 ablation，但需要新的 asymmetric critic 架构和新 checkpoint，不能在当前 run 中途改变。
+
+## 3. 奖励对比
 
 下表逐项记录 Unitree 原始 term 和权重、H0W Profile C 的对应 term 和权重，以及迁移分类。
 
@@ -60,7 +72,7 @@ UFO_HT 中的实现位置：
 | `self_collisions` `-1.0`，G1 使用 self collision 传感器和 `force_threshold=10.0` | H0W 没有自碰撞传感器契约。 |
 | `pose` / `variable_posture` `1.0` | G1 使用关节正则 std map，包括 `std_standing .*:0.05`，以及 walking、running 对 hip、knee、ankle、waist、shoulder、elbow、wrist 的正则分布。H0W 没有对应的 G1 姿态正则图。 |
 
-## 3. PPO 对比
+## 4. PPO 对比
 
 Profile C 的 `UNITREE_PPO_CONFIG` 对应 Unitree G1 `rl_cfg`。Profile A 和 Profile B 保持原有 PPO 默认值。
 
@@ -82,7 +94,7 @@ Profile C 的 `UNITREE_PPO_CONFIG` 对应 Unitree G1 `rl_cfg`。Profile A 和 Pr
 
 Profile A 和 Profile B 的默认值不变：`value_coef=0.5`、`entropy_coef=0.003`、`clip_value_loss=False`、`schedule=fixed`、`learning_rate=1e-4`、`rollout_steps=32`、`minibatch_size=1024`、`ppo_epochs=5`。显式传入 CLI 参数 `--learning-rate`、`--value-coef`、`--entropy-coef`、`--clip-value-loss`、`--desired-kl`、`--clip-ratio`、`--max-grad-norm`、`--rollout-steps`、`--minibatch-size`、`--discount`、`--gae-lambda` 时，会覆盖 profile 默认值。
 
-## 4. 命令与终止语义
+## 5. 命令与终止语义
 
 ### Unitree 原始环境
 
@@ -109,7 +121,7 @@ Profile C 的命令范围为 `(-0.5, -0.5, -1.0)` 到 `(1.0, 0.5, 1.0)`，恰好
 
 H0W 不实现 heading command，直接使用 yaw 速度指令；H0W 没有地形 curriculum；H0W 使用环境自带的终止逻辑，包括 `time_out` 等，没有 Unitree 专用的 bad orientation 70 度项。这些都是既有 H0W 语义，Profile C 没有改动。
 
-## 5. 用法
+## 6. 用法
 
 ### 冒烟验证
 
@@ -145,7 +157,7 @@ checkpoint 与 `config.json` 的 metadata 记录：
 
 跨 profile resume 会检查 metadata 中的 `reward_profile`，不匹配时拒绝恢复，避免把不同奖励或 PPO 合同的 checkpoint 混用。
 
-## 6. 验证记录
+## 7. 验证记录
 
 - 单元测试通过：`tests/test_amp_stage2_piplus_22dof.py` 共 12 项，覆盖 Profile C 公式、PPO 合同和 A/B 回归；`tests/test_speed_stage2.py` 共 3 项通过。
 - `uv run ruff check` 通过。
