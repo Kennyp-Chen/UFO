@@ -22,6 +22,9 @@ tea_debug.log
 .idea/
 .codegraph
 .omo/
+
+# Local debug journal (session scratch notes)
+.debug-journal.md
 # Generated inference media
 model/
 
