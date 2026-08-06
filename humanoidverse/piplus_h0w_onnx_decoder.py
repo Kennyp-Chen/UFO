@@ -102,6 +102,7 @@ class OnnxPiPlusH0WDecoder:
         return torch.as_tensor(actions, device=latent.device, dtype=torch.float32)
 
 
-def load_decoder(_bfm_model_path: Path, decoder_path: Path, device: torch.device) -> OnnxPiPlusH0WDecoder:
-    """Factory accepted by both H0W stage-2 command-line entrypoints."""
+def load_decoder(_bfm_model_path: Path | None, decoder_path: Path, device: torch.device) -> OnnxPiPlusH0WDecoder:
+    """Load the ONNX decoder; the BFM safetensors path is intentionally unused."""
+    del _bfm_model_path
     return OnnxPiPlusH0WDecoder(decoder_path, device)

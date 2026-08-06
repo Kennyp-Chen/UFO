@@ -12,9 +12,9 @@ import numpy as np
 import torch
 
 from humanoidverse.piplus_h0w_locomotion import H0WLocomotionMjlabConfig
-from humanoidverse.piplus_h0w_onnx_decoder import H0W_ACTOR_OBSERVATION_DIM, OnnxPiPlusH0WDecoder, build_actor_observation
+from humanoidverse.piplus_h0w_onnx_decoder import H0W_ACTOR_OBSERVATION_DIM, OnnxPiPlusH0WDecoder, build_actor_observation, load_decoder
 from humanoidverse.piplus_h0w_stage2 import CommandEncoderPolicy, compute_gae, flatten_encoder_observation, project_latent
-from humanoidverse.piplus_h0w_stage2_play import MujocoQposRenderer, resolve_playback_asset
+from humanoidverse.piplus_h0w_stage2_play import MujocoQposRenderer, resolve_playback_asset, resolve_required_playback_asset
 
 
 class PiPlusH0WStage2CommonTest(unittest.TestCase):
@@ -29,6 +29,35 @@ class PiPlusH0WStage2CommonTest(unittest.TestCase):
             resolved = resolve_playback_asset(None, {"motion_dataset": str(dataset_path)}, "motion_dataset")
 
         self.assertEqual(resolved, dataset_path.resolve())
+
+    def test_playback_uses_bundled_decoder_when_metadata_path_is_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            fallback = Path(directory) / "bundled-decoder.onnx"
+            fallback.touch()
+            stale = Path(directory) / "old-checkout" / "decoder.onnx"
+
+            resolved = resolve_playback_asset(None, {"decoder_path": str(stale)}, "decoder_path", fallback=fallback)
+
+        self.assertEqual(resolved, fallback.resolve())
+
+    def test_required_playback_asset_rejects_missing_optional_resolution(self) -> None:
+        with self.assertRaisesRegex(FileNotFoundError, "decoder_path"):
+            resolve_required_playback_asset(None, {}, "decoder_path")
+
+    def test_playback_omits_stale_bfm_metadata_for_onnx_decoder(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing_model = Path(directory) / "removed-model.safetensors"
+
+            resolved = resolve_playback_asset(None, {"bfm_model": str(missing_model)}, "bfm_model")
+
+        self.assertIsNone(resolved)
+
+    def test_explicit_missing_bfm_override_still_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            missing_model = Path(directory) / "missing.safetensors"
+
+            with self.assertRaisesRegex(FileNotFoundError, "bfm_model"):
+                resolve_playback_asset(missing_model, {}, "bfm_model")
 
     def test_qpos_renderer_produces_structured_frames(self) -> None:
         """Offscreen qpos rendering must not reproduce the MJLab rgb_array noise frames.
@@ -89,6 +118,32 @@ class PiPlusH0WStage2CommonTest(unittest.TestCase):
             captured["providers"],
             [("CUDAExecutionProvider", {"device_id": 2}), "CPUExecutionProvider"],
         )
+
+    def test_onnx_factory_loads_without_safetensors(self) -> None:
+        import onnx
+        from onnx import TensorProto, helper
+
+        graph = helper.make_graph(
+            [
+                helper.make_node(
+                    "Constant",
+                    inputs=[],
+                    outputs=["action"],
+                    value=helper.make_tensor("action_value", TensorProto.FLOAT, [1, 22], [0.0] * 22),
+                )
+            ],
+            "decoder",
+            [helper.make_tensor_value_info("actor_input", TensorProto.FLOAT, [1, 616])],
+            [helper.make_tensor_value_info("action", TensorProto.FLOAT, [1, 22])],
+        )
+        model = helper.make_model(graph, opset_imports=[helper.make_opsetid("", 18)])
+        with tempfile.TemporaryDirectory() as directory:
+            decoder_path = Path(directory) / "decoder.onnx"
+            onnx.save(model, decoder_path)
+
+            decoder = load_decoder(None, decoder_path, torch.device("cpu"))
+
+        self.assertEqual(decoder.decoder_path, decoder_path.resolve())
 
     def test_decoder_actor_observation_has_the_616d_contract(self) -> None:
         observation = {

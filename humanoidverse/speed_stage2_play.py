@@ -12,8 +12,10 @@ from humanoidverse.piplus_h0w_stage2_play import (
     playback,
     print_playback_result,
     resolve_playback_asset,
+    resolve_required_playback_asset,
 )
 from humanoidverse.speed_stage2 import (
+    DEFAULT_DECODER_PATH,
     PROJECT_ROOT,
     SPEED_STAGE2_TASK,
 )
@@ -57,9 +59,9 @@ def main(parsed_args: argparse.Namespace | None = None) -> None:
         device=device,
     )
     bfm_model = resolve_playback_asset(args.bfm_model, metadata, "bfm_model")
-    decoder_path = resolve_playback_asset(args.decoder_path, metadata, "decoder_path")
-    robot_config = resolve_playback_asset(args.robot_config, metadata, "robot_config")
-    motion_dataset = resolve_playback_asset(args.motion_dataset, metadata, "motion_dataset")
+    decoder_path = resolve_required_playback_asset(args.decoder_path, metadata, "decoder_path", fallback=DEFAULT_DECODER_PATH)
+    robot_config = resolve_required_playback_asset(args.robot_config, metadata, "robot_config")
+    motion_dataset = resolve_required_playback_asset(args.motion_dataset, metadata, "motion_dataset")
     print_playback_result(
         playback(
             checkpoint_path=checkpoint_path,

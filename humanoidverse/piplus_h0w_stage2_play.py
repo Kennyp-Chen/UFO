@@ -42,11 +42,38 @@ def load_playback_checkpoint(
     return checkpoint_path, metadata, policy_state
 
 
-def resolve_playback_asset(override: Path | None, metadata: Mapping[str, Any], key: str) -> Path:
+def resolve_playback_asset(
+    override: Path | None,
+    metadata: Mapping[str, Any],
+    key: str,
+    *,
+    fallback: Path | None = None,
+) -> Path | None:
+    if override is None and key == "bfm_model" and not metadata.get(key):
+        return None
     candidate = override if override is not None else Path(str(metadata.get(key, "")))
     resolved = candidate.expanduser().resolve()
     if not resolved.is_file():
+        if override is None and key == "bfm_model":
+            return None
+        if override is None and fallback is not None:
+            fallback_path = fallback.expanduser().resolve()
+            if fallback_path.is_file():
+                return fallback_path
         raise FileNotFoundError(f"PiPlus H0W playback asset {key!r} does not exist: {resolved}")
+    return resolved
+
+
+def resolve_required_playback_asset(
+    override: Path | None,
+    metadata: Mapping[str, Any],
+    key: str,
+    *,
+    fallback: Path | None = None,
+) -> Path:
+    resolved = resolve_playback_asset(override, metadata, key, fallback=fallback)
+    if resolved is None:
+        raise FileNotFoundError(f"PiPlus H0W playback asset {key!r} is required")
     return resolved
 
 
@@ -143,7 +170,7 @@ def playback(
     checkpoint_path: Path,
     metadata: Mapping[str, Any],
     policy_state: Mapping[str, torch.Tensor],
-    bfm_model: Path,
+    bfm_model: Path | None,
     decoder_path: Path,
     robot_config: Path,
     motion_dataset: Path,
