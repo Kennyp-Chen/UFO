@@ -124,6 +124,15 @@
 
 - 首选中文总览：`README_zh-CN.md`；英文对应文档：`README.md`。
 - 训练与推理：`docs/TRAIN_INFERENCE.md`。
+- 训练配置全景与 Stage2 实验状态：`docs/training_config_overview_zh.md`。
 - 新机器人数据导入：`docs/import_wizard.md`。
 - robot-aware 训练：`docs/robot_config_training.md`。
 - PiPlus 多卡训练和专项操作以 `docs/` 中对应说明为准，不要从文件名推断参数。
+
+## 配置导航（自动整理）
+
+- 常规入口：`run_train.sh` -> `humanoidverse.train`；FB 是默认 agent，`tech` 是 TeCH，`tldr` 仅保留兼容 alias。
+- 配置分层：`humanoidverse/config/` 是 Hydra 运行时组合，`configs/robots/` 是完整 RobotTrainingSpec，`configs/data/` 是 motion manifest。
+- 当前 Stage2 主线：H0W 22DoF frozen BFM decoder + command encoder；优先 `speed_stage2`，再对照 AMP Profile A；Profile B 需要专用 expert 数据，kick 是独立任务。
+- Stage2 合同：decoder 616 -> 22，encoder 输入 363，latent 256 且投影范数 16；checkpoint、robot、motion data、backend 必须一起核对。
+- Stage2 的详细默认值、已知风险和短回放指标见 `docs/training_config_overview_zh.md`；子目录 AGENTS 只补充各自边界，不重复本文件的全局规则。
