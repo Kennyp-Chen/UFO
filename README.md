@@ -266,6 +266,7 @@ UFO supports manifest-based, source-weighted multi-source data mixing. This is u
 - [Import Wizard](docs/import_wizard.md): RobotState schemas, inspection, and data building.
 - [Robot-Config Training](docs/robot_config_training.md): experimental robot-aware training initialization.
 - [Training and Inference](docs/TRAIN_INFERENCE.md): additional commands and runtime notes.
+- [PiPlus H0W Stage2](docs/piplus_h0w_stage2_zh.md): local ONNX decoder paths and the separate training `model.safetensors` contract.
 - [Deploy branch](https://github.com/Roboparty/UFO/tree/deploy): G1 real-robot deployment and teleoperation runtime.
 
 ## Citation / License

@@ -269,6 +269,7 @@ UFO 支持基于 manifest 的多数据源混合。每个数据源之间的采样
 - [Import Wizard](docs/import_wizard.md)：RobotState schema、数据检查和数据构建。
 - [Robot-Config Training](docs/robot_config_training.md)：实验性的 robot-aware training 初始化说明。
 - [Training and Inference](docs/TRAIN_INFERENCE.md)：更多训练和推理命令。
+- [PiPlus H0W 二阶段](docs/piplus_h0w_stage2_zh.md)：本地 ONNX 解码器路径，以及训练所需独立 `model.safetensors` 的合同。
 - [第三方机器人 BFM 迁移准备](docs/third_party_robot_bfm_migration_zh.html)：资产、数据、配置契约和验收门禁。
 - [PiPlus 8×4090 训练手册](docs/piplus_bfm_8x4090_training_zh.html)：PiPlus BFM-Zero 的部署、训练、恢复和推理全流程。
 - [Deploy branch](https://github.com/Roboparty/UFO/tree/deploy)：G1 实机部署和遥操作运行时。

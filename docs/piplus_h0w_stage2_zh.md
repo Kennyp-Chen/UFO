@@ -1,5 +1,7 @@
 # PiPlus H0W 22DoF 二阶段微调
 
+实验历史、当前运行快照和 observation contract 决策统一维护在 [`docs/experiment_ledger.md`](experiment_ledger.md)。本页保留操作说明和历史上下文，不复制完整台账。
+
 本迁移将 HT_BFM 的 PiPlus H0W 22DoF 二阶段算法接入 UFO 的 MJLab 运行时，并复用冻结的 H0W ONNX 解码器。
 
 ## 算法入口
@@ -10,6 +12,23 @@
 | AMP 二阶段 | `humanoidverse.amp_stage2_piplus_22dof` | `humanoidverse.amp_stage2_piplus_22dof_play` | Profile A 纯 locomotion，或 Profile B AMP 加潜变量先验 |
 
 两个入口均检查 H0W 的固定合同：MJCF 22 动作、ONNX `616 -> 22`、编码器输入 363 维、潜变量 256 维。检查点包含稳定的任务名，速度 PPO 与 AMP 回放和恢复训练会拒绝对方的检查点。
+
+## 模型资产与路径
+
+运行 H0W 二阶段时需要准备与 checkpoint 匹配的本地冻结 ONNX 解码器及其配套文件。模型目录被 `.gitignore` 排除，不会提交到 Git：
+
+```text
+model/piplus_h0w_bfm/decoder/bfmzero-piplus-h0w-isaac-20260629_214205/
+├── config.json
+├── config.yaml
+├── exported/FBcprAuxModel.onnx
+└── tracking_inference/zs_8.pkl
+```
+
+训练仍需要用户单独提供真实可读的 `model.safetensors`，默认位置是
+`model/piplus_h0w_bfm/model.safetensors`。它只用于启动时校验 BFM 的 22DoF actor contract，不能用 ONNX 文件替代；当前用户目录之间的软链接不是可移植依赖。
+
+播放时，ONNX 解码器是实际动作计算主体，不要求 `model.safetensors` 存在。旧 checkpoint metadata 中失效的 `decoder_path` 会回退到上述本地解码器目录；显式通过 CLI 指定的路径仍会严格校验。
 
 ## GPU 约束
 
@@ -28,11 +47,11 @@ Profile A 名称为 `a_mimiclite_speed_safety`。它仅使用 MimicLite 的速�
 ```bash
 CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl uv run python -m humanoidverse.amp_stage2_piplus_22dof \
   --reward-profile a_mimiclite_speed_safety --device cuda:0 \
-  --bfm-model /root/autodl-tmp/chenyupeng/HT_BFM/model/piplus_h0w_bfm/model.safetensors \
-  --decoder-path /root/autodl-tmp/chenyupeng/HT_BFM/model/piplus_h0w_bfm/decoder/bfmzero-piplus-h0w-isaac-20260629_214205/exported/FBcprAuxModel.onnx \
-  --latent-reference /root/autodl-tmp/chenyupeng/HT_BFM/model/piplus_h0w_bfm/decoder/bfmzero-piplus-h0w-isaac-20260629_214205/tracking_inference/zs_8.pkl \
+  --bfm-model /path/to/model.safetensors \
+  --decoder-path model/piplus_h0w_bfm/decoder/bfmzero-piplus-h0w-isaac-20260629_214205/exported/FBcprAuxModel.onnx \
+  --latent-reference model/piplus_h0w_bfm/decoder/bfmzero-piplus-h0w-isaac-20260629_214205/tracking_inference/zs_8.pkl \
   --robot-config configs/robots/piplus_h0w.yaml \
-  --motion-dataset /root/autodl-tmp/chenyupeng/HT_BFM/humanoidverse/data/piplus_h0w_lafan/piplus_h0w_lafan_10s-clipped.pkl
+  --motion-dataset /path/to/piplus_h0w_lafan_10s-clipped.pkl
 ```
 
 ## Profile B：AMP 与潜变量先验
@@ -45,10 +64,10 @@ Profile B 名称为 `b_amp_23dof_reference`。它使用 194 维 AMP 特征：根
 CUDA_VISIBLE_DEVICES=0 MUJOCO_GL=egl uv run python -m humanoidverse.amp_stage2_piplus_22dof \
   --reward-profile b_amp_23dof_reference --device cuda:0 \
   --expert-dataset /path/to/piplus_h0w_locomotion_run_with_stand.pkl \
-  --bfm-model /root/autodl-tmp/chenyupeng/HT_BFM/model/piplus_h0w_bfm/model.safetensors \
-  --decoder-path /root/autodl-tmp/chenyupeng/HT_BFM/model/piplus_h0w_bfm/decoder/bfmzero-piplus-h0w-isaac-20260629_214205/exported/FBcprAuxModel.onnx \
+  --bfm-model /path/to/model.safetensors \
+  --decoder-path model/piplus_h0w_bfm/decoder/bfmzero-piplus-h0w-isaac-20260629_214205/exported/FBcprAuxModel.onnx \
   --robot-config configs/robots/piplus_h0w.yaml \
-  --motion-dataset /root/autodl-tmp/chenyupeng/HT_BFM/humanoidverse/data/piplus_h0w_lafan/piplus_h0w_lafan_10s-clipped.pkl
+  --motion-dataset /path/to/piplus_h0w_lafan_10s-clipped.pkl
 ```
 
 ## 有界回放
