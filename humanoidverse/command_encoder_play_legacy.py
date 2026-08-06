@@ -22,22 +22,20 @@ Run headless with EGL on an idle GPU, e.g.::
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 from typing import Final
 
-DEFAULT_LEGACY_REPO: Final = Path("/root/autodl-tmp/chenyupeng/HT_BFM")
+PROJECT_ROOT: Final = Path(__file__).resolve().parents[1]
+DEFAULT_LEGACY_REPO: Final = Path(os.environ.get("UFO_HT_LEGACY_REPO", PROJECT_ROOT.parent / "HT_BFM"))
 DEFAULT_DECODER_PATH: Final = (
-    Path("/root/autodl-tmp/chenyupeng/HT_BFM/model/piplus_h0w_bfm/decoder")
+    PROJECT_ROOT / "model/piplus_h0w_bfm/decoder"
     / "bfmzero-piplus-h0w-isaac-20260629_214205/exported/FBcprAuxModel.onnx"
 )
-DEFAULT_BFM_MODEL: Final = Path("/root/autodl-tmp/chenyupeng/HT_BFM/model/piplus_h0w_bfm/model.safetensors")
-DEFAULT_ROBOT_CONFIG: Final = Path(
-    "/root/autodl-tmp/chenyupeng/HT_BFM/humanoidverse/config/robot/piplus/PiPlus_S_12L8A0G2H0W.yaml"
-)
-DEFAULT_EXPERT_DATASET: Final = Path(
-    "/root/autodl-tmp/chenyupeng/HT_BFM/humanoidverse/data/piplus_h0w_lafan/piplus_h0w_lafan_10s-clipped.pkl"
-)
+DEFAULT_BFM_MODEL: Final = PROJECT_ROOT / "model/piplus_h0w_bfm/model.safetensors"
+DEFAULT_ROBOT_CONFIG: Final = DEFAULT_LEGACY_REPO / "humanoidverse/config/robot/piplus/PiPlus_S_12L8A0G2H0W.yaml"
+DEFAULT_EXPERT_DATASET: Final = DEFAULT_LEGACY_REPO / "humanoidverse/data/piplus_h0w_lafan/piplus_h0w_lafan_10s-clipped.pkl"
 DEFAULT_DECODER_FACTORY: Final = "humanoidverse.piplus_h0w_onnx_decoder:load_decoder"
 
 AMP_STAGE2_TASK: Final = "amp_stage2_piplus_22dof"
@@ -57,6 +55,10 @@ def _resolved_directory(path: Path, name: str) -> Path:
     if not resolved.is_dir():
         raise FileNotFoundError(f"{name} does not exist: {resolved}")
     return resolved
+
+
+def _legacy_asset_default(repo: Path, relative_path: str) -> Path:
+    return repo / relative_path
 
 
 def install_legacy_imports(htbfm_repo: Path) -> None:
@@ -88,11 +90,11 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--htbfm-repo", type=Path, default=DEFAULT_LEGACY_REPO)
     parser.add_argument("--checkpoint", type=Path, required=True)
-    parser.add_argument("--bfm-model", type=Path, default=DEFAULT_BFM_MODEL)
+    parser.add_argument("--bfm-model", type=Path, default=None)
     parser.add_argument("--decoder-path", type=Path, default=DEFAULT_DECODER_PATH)
     parser.add_argument("--decoder-factory", default=DEFAULT_DECODER_FACTORY)
-    parser.add_argument("--robot-config", type=Path, default=DEFAULT_ROBOT_CONFIG)
-    parser.add_argument("--expert-dataset", type=Path, default=DEFAULT_EXPERT_DATASET)
+    parser.add_argument("--robot-config", type=Path, default=None)
+    parser.add_argument("--expert-dataset", type=Path, default=None)
     parser.add_argument("--device", default="cpu", help="Policy/decoder device; cpu matches the legacy playback path.")
     parser.add_argument("--fixed-command", type=float, nargs=3, default=(0.4, 0.0, 0.0), metavar=("VX", "VY", "WZ"))
     parser.add_argument("--command-smoothing", type=float, default=0.15)
@@ -117,10 +119,20 @@ def main() -> int:
     if not 0.0 < args.command_smoothing <= 1.0:
         raise ValueError("--command-smoothing must be in (0, 1]")
     checkpoint_path = _resolved_file(args.checkpoint, "checkpoint")
-    bfm_model = _resolved_file(args.bfm_model, "BFM model")
+    bfm_model = _resolved_file(args.bfm_model, "BFM model") if args.bfm_model is not None else None
     decoder_path = _resolved_file(args.decoder_path, "decoder")
-    robot_config = _resolved_file(args.robot_config, "robot config")
-    expert_dataset = _resolved_file(args.expert_dataset, "expert dataset")
+    robot_config = _resolved_file(
+        args.robot_config
+        if args.robot_config is not None
+        else _legacy_asset_default(args.htbfm_repo, "humanoidverse/config/robot/piplus/PiPlus_S_12L8A0G2H0W.yaml"),
+        "robot config",
+    )
+    expert_dataset = _resolved_file(
+        args.expert_dataset
+        if args.expert_dataset is not None
+        else _legacy_asset_default(args.htbfm_repo, "humanoidverse/data/piplus_h0w_lafan/piplus_h0w_lafan_10s-clipped.pkl"),
+        "expert dataset",
+    )
     output = args.output.expanduser().resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
 

@@ -9,6 +9,9 @@ from tempfile import TemporaryDirectory
 from typing import Sequence
 
 from humanoidverse.speed_stage2_legacy_play import (
+    DEFAULT_LEGACY_PYTHON,
+    DEFAULT_LEGACY_REPO,
+    PROJECT_ROOT,
     build_command,
     build_environment,
     launch,
@@ -30,6 +33,10 @@ class FakeRunner:
 
 
 class SpeedStage2LegacyPlayTest(unittest.TestCase):
+    def test_defaults_do_not_use_user_specific_absolute_paths(self) -> None:
+        self.assertEqual(DEFAULT_LEGACY_REPO, PROJECT_ROOT.parent / "HT_BFM")
+        self.assertEqual(DEFAULT_LEGACY_PYTHON, Path(sys.executable))
+
     def _paths(self, directory: str) -> dict[str, Path]:
         root = Path(directory)
         legacy_repo = root / "legacy repo"

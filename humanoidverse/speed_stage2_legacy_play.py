@@ -10,8 +10,9 @@ from typing import Callable, Final
 
 COMMAND_LOW: Final = (-0.8, -0.5, -0.8)
 COMMAND_HIGH: Final = (0.8, 0.5, 0.8)
-DEFAULT_LEGACY_REPO: Final = Path("/root/autodl-tmp/chenyupeng/HT_BFM")
-DEFAULT_LEGACY_PYTHON: Final = Path("/root/autodl-tmp/chenyupeng/.conda/envs/HT_BFM/bin/python")
+PROJECT_ROOT: Final = Path(__file__).resolve().parents[1]
+DEFAULT_LEGACY_REPO: Final = Path(os.environ.get("UFO_HT_LEGACY_REPO", PROJECT_ROOT.parent / "HT_BFM"))
+DEFAULT_LEGACY_PYTHON: Final = Path(os.environ.get("UFO_HT_LEGACY_PYTHON", sys.executable))
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 
 
