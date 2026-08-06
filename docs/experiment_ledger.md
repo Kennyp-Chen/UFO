@@ -115,3 +115,16 @@ The current H0W robot can expose the following flat-style critic information wit
 Decision: do not add these features to the active Profile C run. If a future asymmetric critic is tested, use H0W-native clean foot/base features first, keep the actor and decoder contract unchanged, explicitly version the critic input, and compare against a no-privileged-critic control. Do not copy rough-terrain `height_scan` or claim exact Unitree sensor equivalence without matching the sensor/body semantics.
 
 The live Profile C process PID 885173 remained active on physical GPU 2. The log reached iteration 992 and `checkpoint_900.pt` exists. Snapshot metrics were reward_mean 0.01875, locomotion_reward_mean 0.01897, approx_kl 0.01104, effective learning rate `2.25e-5`, termination rate 0.000936, and value loss 0.1536. These are progress snapshots, not final evaluation results.
+
+### 2026-08-06 23:38:00 +0800, `profile_c_checkpoint_1200_playback`, completed
+
+Played `runs/amp_stage2_piplus_h0w/profile_c_1gpu_4096env_20260806/checkpoint_1200.pt` with the HT_BFM legacy playback backend. The command used physical GPU 3 for EGL rendering and CPU policy/decoder execution:
+
+```bash
+CUDA_VISIBLE_DEVICES=3 MUJOCO_GL=egl MUJOCO_EGL_DEVICE_ID=3 \
+uv run python -m humanoidverse.command_encoder_play_legacy \
+  --checkpoint runs/amp_stage2_piplus_h0w/profile_c_1gpu_4096env_20260806/checkpoint_1200.pt \
+  --output runs/amp_stage2_piplus_h0w/profile_c_1gpu_4096env_20260806/play/checkpoint_1200.mp4
+```
+
+The checkpoint metadata was `task=amp_stage2_piplus_22dof`, `reward_profile=c_unitree_velocity_h0w_compat`, `iteration=1200`; the legacy robot config and motion dataset were resolved from the external HT_BFM checkout, while the decoder path used the local runtime asset. The output is `runs/amp_stage2_piplus_h0w/profile_c_1gpu_4096env_20260806/play/checkpoint_1200.mp4`, with companion log `play/play_1200_legacy.log`. Validation passed with exit code 0, H.264, 720x720, 25 FPS, 250 frames, 10 seconds. Three sampled frames had mean horizontal pixel differences 1.75-1.83, mean vertical differences 3.50-3.79, and RGB correlation 0.954-0.956, matching the previously accepted structured legacy renders rather than the known noise frames.
