@@ -1477,6 +1477,8 @@ class HumanoidVerseMjlabConfig(BaseConfig):
     root_height_obs: bool = False
     auto_reset: bool = False
     seed: int | None = None
+    render_mode: str | None = None
+    render_size: int = 720
 
     def build(self, num_envs: int = 1) -> tp.Tuple[HumanoidVerseMjlabVectorEnv, tp.Any]:
         assert num_envs >= 1
@@ -1502,7 +1504,10 @@ class HumanoidVerseMjlabConfig(BaseConfig):
             auto_reset=self.auto_reset,
             robot_training=self.robot_training,
         )
-        mjlab_env = ManagerBasedRlEnv(mjlab_cfg, device=self.device)
+        if self.render_mode == "rgb_array":
+            mjlab_cfg.viewer.height = self.render_size
+            mjlab_cfg.viewer.width = self.render_size
+        mjlab_env = ManagerBasedRlEnv(mjlab_cfg, device=self.device, render_mode=self.render_mode)
         core = HumanoidVerseMjlabCore(hv_config, mjlab_env, creation_config=self)
         env = HumanoidVerseMjlabVectorEnv(
             core,
